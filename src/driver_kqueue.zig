@@ -59,13 +59,13 @@ pub fn poll(self: *Self, timeout: i32) !void {
 
         if (e.filter == os.EVFILT_READ) {
             if (file.waker.set(.{ .read = true })) |node| {
-                resume node.frame;
+                file.schedule(file, node.frame);
             }
         }
 
         if (e.filter == os.EVFILT_WRITE) {
             if (file.waker.set(.{ .write = true })) |node| {
-                resume node.frame;
+                file.schedule(file, node.frame);
             }
         }
     }

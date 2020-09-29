@@ -31,7 +31,7 @@ pub fn Stream(comptime Self: type) type {
                 };
 
                 if (self.file.waker.next(.{ .read = true })) |node| {
-                    resume node.frame;
+                    self.file.schedule(&self.file, node.frame);
                 }
 
                 return Connection(Self){ .address = address, .stream = Self{ .file = pike.File{ .handle = handle } } };
@@ -49,7 +49,7 @@ pub fn Stream(comptime Self: type) type {
                 };
 
                 if (self.file.waker.next(.{ .read = true })) |node| {
-                    resume node.frame;
+                    self.file.schedule(&self.file, node.frame);
                 }
 
                 return n;
@@ -67,7 +67,7 @@ pub fn Stream(comptime Self: type) type {
                 };
 
                 if (self.file.waker.next(.{ .write = true })) |node| {
-                    resume node.frame;
+                    self.file.schedule(&self.file, node.frame);
                 }
 
                 return n;

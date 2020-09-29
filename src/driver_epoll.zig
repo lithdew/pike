@@ -38,19 +38,19 @@ pub fn poll(self: *Self, timeout: i32) !void {
 
         if (e.events & os.EPOLLERR != 0 or e.events & os.EPOLLHUP != 0) {
             if (file.waker.set(.{ .read = true })) |node| {
-                resume node.frame;
+                file.schedule(file, node.frame);
             }
 
             if (file.waker.set(.{ .write = true })) |node| {
-                resume node.frame;
+                file.schedule(file, node.frame);
             }
         } else if (e.events & os.EPOLLIN != 0) {
             if (file.waker.set(.{ .read = true })) |node| {
-                resume node.frame;
+                file.schedule(file, node.frame);
             }
         } else if (e.events & os.EPOLLOUT != 0) {
             if (file.waker.set(.{ .write = true })) |node| {
-                resume node.frame;
+                file.schedule(file, node.frame);
             }
         }
     }
