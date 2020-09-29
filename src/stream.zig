@@ -67,5 +67,21 @@ pub fn Stream(comptime Self: type) type {
                 return n;
             }
         }
+
+        pub fn send(self: *Self, buf: []const u8) callconv(.Async) !usize {
+            while (true) {
+                const n = os.send(self.file.handle, buf, 0) catch |err| switch (err) {
+                    error.WouldBlock => {
+                        self.file.waker.wait(.{ .write = true });
+                        continue;
+                    },
+                    else => return err,
+                };
+
+                self.file.schedule(.{ .write = true });
+
+                return n;
+            }
+        }
     };
 }
