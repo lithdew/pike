@@ -8,12 +8,16 @@ pub const Driver = switch (builtin.os.tag) {
     else => @compileError("Unsupported OS"),
 };
 
+pub const DriverOptions = struct {
+    executor: Executor = defaultExecutor,
+};
+
 pub const Event = packed struct {
     read: bool = false,
     write: bool = false,
 };
 
-pub const Executor = fn(*pike.File, frame: anyframe) void;
+pub const Executor = fn (*pike.File, frame: anyframe) void;
 
 pub fn defaultExecutor(file: *pike.File, frame: anyframe) void {
     resume frame;

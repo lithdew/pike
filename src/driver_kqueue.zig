@@ -7,14 +7,14 @@ const assert = std.debug.assert;
 
 const Self = @This();
 
-executor: pike.Executor = pike.defaultExecutor,
+executor: pike.Executor,
 handle: os.fd_t = -1,
 
-pub fn init() !Self {
+pub fn init(opts: pike.DriverOptions) !Self {
     const handle = try os.kqueue();
     errdefer os.close(handle);
 
-    return Self{ .handle = handle };
+    return Self{ .executor = opts.executor, .handle = handle };
 }
 
 pub fn deinit(self: *Self) void {

@@ -6,14 +6,14 @@ const pike = @import("pike.zig");
 
 const Self = @This();
 
-executor: pike.Executor = pike.defaultExecutor,
+executor: pike.Executor,
 handle: os.fd_t = -1,
 
-pub fn init() !Self {
+pub fn init(opts: pike.DriverOptions) !Self {
     const handle = try os.epoll_create1(os.EPOLL_CLOEXEC);
     errdefer os.close(handle);
 
-    return Self{ .handle = handle };
+    return Self{ .executor = opts.executor, .handle = handle };
 }
 
 pub fn deinit(self: *Self) void {

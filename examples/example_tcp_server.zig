@@ -20,7 +20,7 @@ pub fn loop(driver: *pike.Driver, stopped: *bool) callconv(.Async) !void {
     std.debug.print("Listening for connections on: {}\n", .{address});
 
     var conn = try listener.accept();
-    try driver.register(&conn.stream.file, .{ .read = true, .write = true});
+    try driver.register(&conn.stream.file, .{ .read = true, .write = true });
 
     std.debug.print("Client connected: {}\n", .{conn.address});
 
@@ -32,7 +32,7 @@ pub fn loop(driver: *pike.Driver, stopped: *bool) callconv(.Async) !void {
 }
 
 pub fn main() !void {
-    var driver = try pike.Driver.init();
+    var driver = try pike.Driver.init(.{});
     defer driver.deinit();
 
     var stopped = false;

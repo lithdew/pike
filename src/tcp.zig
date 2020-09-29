@@ -10,7 +10,7 @@ const Self = @This();
 file: pike.File = .{},
 
 pub fn init(driver: *pike.Driver) Self {
-    return Self{ .file = .{ .handle = undefined, .driver = driver }};
+    return Self{ .file = .{ .handle = undefined, .driver = driver } };
 }
 
 pub usingnamespace pike.Handle(Self);
