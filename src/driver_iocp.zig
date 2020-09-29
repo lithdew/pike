@@ -18,7 +18,7 @@ pub fn deinit(self: *Self) void {
     os.CloseHandle(self.handle);
 }
 
-pub fn register(self: *Self, file: *pike.File) !void {
+pub fn register(self: *Self, file: *pike.File, comptime event: pike.Event) !void {
     // TODO(kenta): implement
 }
 

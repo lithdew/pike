@@ -6,3 +6,8 @@ pub const Driver = switch (builtin.os.tag) {
     .windows => @import("driver_iocp.zig"),
     else => @compileError("Unsupported OS"),
 };
+
+pub const Event = packed struct {
+    read: bool = false,
+    write: bool = false,
+};

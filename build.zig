@@ -16,8 +16,8 @@ pub fn build(b: *std.build.Builder) !void {
     const test_step = b.step("test", "Runs the tests");
 
     inline for (tests) |name| {
-        const @"test" = b.addTest("src/" ++ name ++ ".zig");
-        test_step.dependOn(&@"test".step);
+        const test_cmd = b.addTest("src/" ++ name ++ ".zig");
+        test_step.dependOn(&test_cmd.step);
     }
 
     const examples = .{
@@ -34,5 +34,11 @@ pub fn build(b: *std.build.Builder) !void {
         example.addPackage(pkg);
 
         examples_step.dependOn(&example.step);
+
+        const run_cmd = example.run();
+        run_cmd.step.dependOn(b.getInstallStep());
+
+        const run_step = b.step(name, "Run " ++ name);
+        run_step.dependOn(&run_cmd.step);
     }
 }

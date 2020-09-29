@@ -1,11 +1,7 @@
 const std = @import("std");
+const pike = @import("pike.zig");
 
 const Self = @This();
-
-const Event = enum(u1) {
-    Read,
-    Write,
-};
 
 const Node = struct {
     next: ?*Node align(IS_READY + 1) = null,
@@ -20,7 +16,7 @@ lock: std.Mutex = .{},
 readers: usize = @ptrToInt(@as(?*Node, null)),
 writers: usize = @ptrToInt(@as(?*Node, null)),
 
-pub inline fn recover(ptr: usize) ?*Node {
+inline fn recover(ptr: usize) ?*Node {
     return @intToPtr(?*Node, ptr & ~@as(usize, IS_READY));
 }
 
@@ -49,11 +45,13 @@ inline fn shift(ptr: *usize) ?*Node {
     return node;
 }
 
-pub fn wait(self: *Self, comptime event: Event) callconv(.Async) void {
-    const head = switch (event) {
-        .Read => &self.readers,
-        .Write => &self.writers,
-    };
+pub fn wait(self: *Self, comptime event: pike.Event) callconv(.Async) void {
+    const head = if (event.read)
+        &self.readers
+    else if (event.write)
+        &self.writers
+    else
+        @compileError("unknown event type");
 
     const lock = self.lock.acquire();
 
@@ -69,11 +67,13 @@ pub fn wait(self: *Self, comptime event: Event) callconv(.Async) void {
     }
 }
 
-pub fn set(self: *Self, comptime event: Event) ?*Node {
-    const head = switch (event) {
-        .Read => &self.readers,
-        .Write => &self.writers,
-    };
+pub fn set(self: *Self, comptime event: pike.Event) ?*Node {
+    const head = if (event.read)
+        &self.readers
+    else if (event.write)
+        &self.writers
+    else
+        @compileError("unknown event type");
 
     const lock = self.lock.acquire();
     defer lock.release();
@@ -90,11 +90,13 @@ pub fn set(self: *Self, comptime event: Event) ?*Node {
     return shift(head);
 }
 
-pub fn next(self: *Self, comptime event: Event) ?*Node {
-    const head = switch (event) {
-        .Read => &self.readers,
-        .Write => &self.writers,
-    };
+pub fn next(self: *Self, comptime event: pike.Event) ?*Node {
+    const head = if (event.read)
+        &self.readers
+    else if (event.write)
+        &self.writers
+    else
+        @compileError("unknown event type");
 
     const lock = self.lock.acquire();
     defer lock.release();
@@ -106,14 +108,14 @@ pub fn next(self: *Self, comptime event: Event) ?*Node {
     return shift(head);
 }
 
-test "waker: wait" {
+test "Waker.wait" {
     const testing = std.testing;
 
     var waker: Self = .{};
 
-    var A = async waker.wait(.Write);
-    var B = async waker.wait(.Write);
-    var C = async waker.wait(.Write);
+    var A = async waker.wait(.{ .write = true });
+    var B = async waker.wait(.{ .write = true });
+    var C = async waker.wait(.{ .write = true });
 
     var ptr = Self.recover(waker.writers);
 
@@ -132,19 +134,19 @@ test "waker: wait" {
     testing.expect(c != null);
     testing.expect(d == null);
 
-    testing.expect(waker.set(.Write).? == a);
+    testing.expect(waker.set(.{ .write = true }).? == a);
     resume a.?.frame;
 
-    testing.expect(waker.set(.Write).? == b.?);
+    testing.expect(waker.set(.{ .write = true }).? == b.?);
     resume b.?.frame;
 
-    testing.expect(waker.set(.Write).? == c.?);
+    testing.expect(waker.set(.{ .write = true }).? == c.?);
     resume c.?.frame;
 
-    testing.expect(waker.set(.Write) == null);
+    testing.expect(waker.set(.{ .write = true }) == null);
     testing.expect(waker.writers & Self.IS_READY != 0);
 
-    var D = async waker.wait(.Write);
+    var D = async waker.wait(.{ .write = true });
     testing.expect(waker.writers == @ptrToInt(@as(?*Self.Node, null)));
 
     nosuspend await A;

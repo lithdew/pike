@@ -20,8 +20,10 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-pub fn register(self: *Self, file: *pike.File) !void {
-    var ev: os.epoll_event = .{ .events = os.EPOLLET | os.EPOLLIN | os.EPOLLOUT, .data = .{ .ptr = @ptrToInt(file) } };
+pub fn register(self: *Self, file: *pike.File, comptime event: pike.Event) !void {
+    var ev: os.epoll_event = .{ .events = os.EPOLLET, .data = .{ .ptr = @ptrToInt(file) } };
+    if (event.read) ev.events |= os.EPOLLIN;
+    if (event.write) ev.events |= os.EPOLLOUT;
 
     try os.epoll_ctl(self.handle, os.EPOLL_CTL_ADD, file.handle, &ev);
 }
@@ -35,13 +37,13 @@ pub fn poll(self: *Self, timeout: i32) !void {
         const file = @intToPtr(*pike.File, e.data.ptr);
 
         if (e.events & os.EPOLLIN != 0) {
-            if (file.waker.set(.Read)) |node| {
+            if (file.waker.set(.{ .read = true })) |node| {
                 resume node.frame;
             }
         }
 
         if (e.events & os.EPOLLOUT != 0) {
-            if (file.waker.set(.Write)) |node| {
+            if (file.waker.set(.{ .write = true })) |node| {
                 resume node.frame;
             }
         }

@@ -24,13 +24,13 @@ pub fn Stream(comptime Self: type) type {
             while (true) {
                 const handle = os.accept(self.file.handle, &address.any, &address_len, os.SOCK_NONBLOCK | os.SOCK_CLOEXEC) catch |err| switch (err) {
                     error.WouldBlock => {
-                        self.file.waker.wait(.Read);
+                        self.file.waker.wait(.{ .read = true });
                         continue;
                     },
                     else => return err,
                 };
 
-                if (self.file.waker.next(.Read)) |node| {
+                if (self.file.waker.next(.{ .read = true })) |node| {
                     resume node.frame;
                 }
 
@@ -42,13 +42,13 @@ pub fn Stream(comptime Self: type) type {
             while (true) {
                 const n = os.read(self.file.handle, buf) catch |err| switch (err) {
                     error.WouldBlock => {
-                        self.file.waker.wait(.Read);
+                        self.file.waker.wait(.{ .read = true });
                         continue;
                     },
                     else => return err,
                 };
 
-                if (self.file.waker.next(.Read)) |node| {
+                if (self.file.waker.next(.{ .read = true })) |node| {
                     resume node.frame;
                 }
 
@@ -60,13 +60,13 @@ pub fn Stream(comptime Self: type) type {
             while (true) {
                 const n = os.write(self.file.handle, buf) catch |err| switch (err) {
                     error.WouldBlock => {
-                        self.file.waker.wait(.Write);
+                        self.file.waker.wait(.{ .write = true });
                         continue;
                     },
                     else => return err,
                 };
 
-                if (self.file.waker.next(.Write)) |node| {
+                if (self.file.waker.next(.{ .write = true })) |node| {
                     resume node.frame;
                 }
 
