@@ -13,7 +13,7 @@ A minimal cross-platform high-performance async I/O library written in [Zig](htt
 - [ ] IOCP support
 - [ ] Signal support
     - [x] epoll support
-    - [ ] kqueue support
+    - [x] kqueue support
     - [ ] IOCP support
 - [x] TCP sockets
 - [ ] UDP sockets

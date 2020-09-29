@@ -1,5 +1,6 @@
 const std = @import("std");
 const os = std.os;
+const time = std.time;
 
 const pike = @import("pike.zig");
 
@@ -23,22 +24,23 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn register(self: *Self, file: *pike.File, comptime event: pike.Event) !void {
-    var changelist: [2]os.Kevent = undefined;
+    var changelist: [2]os.Kevent = [1]os.Kevent{.{
+        .ident = undefined,
+        .filter = undefined,
+        .flags = os.EV_ADD | os.EV_CLEAR,
+        .fflags = 0,
+        .data = 0,
+        .udata = undefined,
+    }} ** 2;
     comptime var changelist_len = 0;
 
     comptime if (event.read) {
         changelist[changelist_len].filter = os.EVFILT_READ;
-        changelist[changelist_len].flags = os.EV_ADD | os.EV_ENABLE | os.EV_CLEAR;
-        changelist[changelist_len].fflags = 0;
-        changelist[changelist_len].data = 0;
         changelist_len += 1;
     };
 
     comptime if (event.write) {
         changelist[changelist_len].filter = os.EVFILT_WRITE;
-        changelist[changelist_len].flags = os.EV_ADD | os.EV_ENABLE | os.EV_CLEAR;
-        changelist[changelist_len].fflags = 0;
-        changelist[changelist_len].data = 0;
         changelist_len += 1;
     };
 
@@ -53,16 +55,22 @@ pub fn register(self: *Self, file: *pike.File, comptime event: pike.Event) !void
 pub fn poll(self: *Self, timeout: i32) !void {
     var events: [1024]os.Kevent = undefined;
 
-    const num_events = try os.kevent(self.handle, &[0]os.Kevent{}, &events, &os.timespec{ .tv_sec = 0, .tv_nsec = @intCast(c_long, timeout) });
+    const timeout_spec = os.timespec{
+        .tv_sec = @divTrunc(timeout, time.ns_per_s),
+        .tv_nsec = @rem(timeout, time.ns_per_s),
+    };
+
+    const num_events = try os.kevent(self.handle, &[0]os.Kevent{}, &events, &timeout_spec);
 
     for (events[0..num_events]) |e, i| {
         const file = @intToPtr(*pike.File, e.udata);
 
-        if (e.filter == os.EVFILT_READ) {
+        if (e.flags & os.EV_ERROR != 0 or e.flags & os.EV_EOF != 0) {
             file.trigger(.{ .read = true });
-        }
-
-        if (e.filter == os.EVFILT_WRITE) {
+            file.trigger(.{ .write = true });
+        } else if (e.filter == os.EVFILT_READ) {
+            file.trigger(.{ .read = true });
+        } else if (e.filter == os.EVFILT_WRITE) {
             file.trigger(.{ .write = true });
         }
     }
