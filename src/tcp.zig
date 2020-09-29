@@ -27,6 +27,18 @@ pub fn bind(self: *Self, address: net.Address) !void {
     try os.bind(self.file.handle, &address.any, address.getOsSockLen());
 }
 
+pub fn shutdown(self: *Self, how: i32) !void {
+    const rc = os.system.shutdown(self.file.handle, how);
+    switch (os.errno(rc)) {
+        0 => return,
+        os.EBADF => unreachable,
+        os.EINVAL => return error.UnknownShutdownMethod,
+        os.ENOTCONN => return error.SocketNotConnected,
+        os.ENOTSOCK => return error.FileDescriptorNotSocket,
+        else => unreachable,
+    }
+}
+
 pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {
     self.file.handle = try os.socket(address.any.family, os.SOCK_STREAM | os.SOCK_CLOEXEC | os.SOCK_NONBLOCK, os.IPPROTO_TCP);
     errdefer os.close(self.file.handle);
