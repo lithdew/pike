@@ -6,13 +6,14 @@ const pike = @import("pike.zig");
 
 const Self = @This();
 
+executor: pike.Executor = pike.defaultExecutor,
 handle: os.fd_t = -1,
 
-pub fn init(self: *Self) !void {
+pub fn init() !Self {
     const handle = try os.epoll_create1(os.EPOLL_CLOEXEC);
     errdefer os.close(handle);
 
-    self.* = .{ .handle = handle };
+    return Self{ .handle = handle };
 }
 
 pub fn deinit(self: *Self) void {
@@ -37,21 +38,12 @@ pub fn poll(self: *Self, timeout: i32) !void {
         const file = @intToPtr(*pike.File, e.data.ptr);
 
         if (e.events & os.EPOLLERR != 0 or e.events & os.EPOLLHUP != 0) {
-            if (file.waker.set(.{ .read = true })) |node| {
-                file.schedule(file, node.frame);
-            }
-
-            if (file.waker.set(.{ .write = true })) |node| {
-                file.schedule(file, node.frame);
-            }
+            file.trigger(.{ .read = true });
+            file.trigger(.{ .write = true });
         } else if (e.events & os.EPOLLIN != 0) {
-            if (file.waker.set(.{ .read = true })) |node| {
-                file.schedule(file, node.frame);
-            }
+            file.trigger(.{ .read = true });
         } else if (e.events & os.EPOLLOUT != 0) {
-            if (file.waker.set(.{ .write = true })) |node| {
-                file.schedule(file, node.frame);
-            }
+            file.trigger(.{ .write = true });
         }
     }
 }

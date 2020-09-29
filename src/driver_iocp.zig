@@ -5,13 +5,14 @@ const pike = @import("pike.zig");
 
 const Self = @This();
 
+executor: pike.Executor = pike.defaultExecutor,
 handle: os.HANDLE = os.INVALID_HANDLE_VALUE,
 
-pub fn init(self: *Self) !void {
+pub fn init() !Self {
     const handle = try os.CreateIoCompletionPort(os.INVALID_HANDLE_VALUE, null, undefined, std.math.maxInt(os.DWORD));
     errdefer os.CloseHandle(handle);
 
-    self.* = .{ .handle = handle };
+    return Self{ .handle = handle };
 }
 
 pub fn deinit(self: *Self) void {

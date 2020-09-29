@@ -8,9 +8,9 @@ const pike = @import("pike");
 pub fn loop(driver: *pike.Driver, stopped: *bool) callconv(.Async) !void {
     defer stopped.* = true;
 
-    var socket: pike.TCP = .{};
+    var socket = pike.TCP.init(driver);
 
-    try socket.connect(driver, try net.Address.parseIp("127.0.0.1", 9000));
+    try socket.connect(try net.Address.parseIp("127.0.0.1", 9000));
     defer socket.close();
 
     std.debug.print("Connected!\n", .{});
@@ -22,9 +22,7 @@ pub fn loop(driver: *pike.Driver, stopped: *bool) callconv(.Async) !void {
 }
 
 pub fn main() !void {
-    var driver: pike.Driver = .{};
-
-    try driver.init();
+    var driver = try pike.Driver.init();
     defer driver.deinit();
 
     var stopped = false;

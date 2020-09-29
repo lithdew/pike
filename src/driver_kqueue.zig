@@ -7,13 +7,14 @@ const assert = std.debug.assert;
 
 const Self = @This();
 
+executor: pike.Executor = pike.defaultExecutor,
 handle: os.fd_t = -1,
 
-pub fn init(self: *Self) !void {
+pub fn init() !Self {
     const handle = try os.kqueue();
     errdefer os.close(handle);
 
-    self.* = .{ .handle = handle };
+    return Self{ .handle = handle };
 }
 
 pub fn deinit(self: *Self) void {
@@ -58,15 +59,11 @@ pub fn poll(self: *Self, timeout: i32) !void {
         const file = @intToPtr(*pike.File, e.udata);
 
         if (e.filter == os.EVFILT_READ) {
-            if (file.waker.set(.{ .read = true })) |node| {
-                file.schedule(file, node.frame);
-            }
+            file.trigger(.{ .read = true });
         }
 
         if (e.filter == os.EVFILT_WRITE) {
-            if (file.waker.set(.{ .write = true })) |node| {
-                file.schedule(file, node.frame);
-            }
+            file.trigger(.{ .write = true });
         }
     }
 }

@@ -10,9 +10,9 @@ pub fn loop(driver: *pike.Driver, stopped: *bool) callconv(.Async) !void {
 
     const address = try net.Address.parseIp("::", 9000);
 
-    var listener: pike.TCP = .{};
+    var listener = pike.TCP.init(driver);
 
-    try listener.bind(driver, address);
+    try listener.bind(address);
     defer listener.close();
 
     try listener.listen(128);
@@ -32,9 +32,7 @@ pub fn loop(driver: *pike.Driver, stopped: *bool) callconv(.Async) !void {
 }
 
 pub fn main() !void {
-    var driver: pike.Driver = .{};
-
-    try driver.init();
+    var driver = try pike.Driver.init();
     defer driver.deinit();
 
     var stopped = false;

@@ -1,17 +1,24 @@
 const os = @import("std").os;
 const pike = @import("pike.zig");
-const Waker = pike.Waker;
-
-fn schedule(file: *File, frame: anyframe) void {
-    resume frame;
-}
 
 pub const File = struct {
     const Self = @This();
 
-    schedule: fn (*File, anyframe) void = schedule,
-    handle: os.fd_t = undefined,
-    waker: Waker = .{},
+    handle: os.fd_t,
+    driver: *pike.Driver,
+    waker: pike.Waker = .{},
+
+    pub fn trigger(self: *Self, comptime event: pike.Event) void {
+        if (self.waker.set(event)) |node| {
+            self.driver.executor(self, node.frame);
+        }
+    }
+
+    pub fn schedule(self: *Self, comptime event: pike.Event) void {
+        if (self.waker.next(event)) |node| {
+            self.driver.executor(self, node.frame);
+        }
+    }
 };
 
 pub fn Handle(comptime Self: type) type {
