@@ -24,6 +24,7 @@ pub fn build(b: *std.build.Builder) !void {
         "example_tcp_client",
         "example_tcp_server",
         "example_tcp_benchmark",
+        "example_signal",
     };
 
     const examples_step = b.step("examples", "Builds the examples");

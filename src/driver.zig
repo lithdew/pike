@@ -1,11 +1,18 @@
 const builtin = @import("builtin");
 const pike = @import("pike.zig");
 
-pub const Driver = switch (builtin.os.tag) {
-    .linux => @import("driver_epoll.zig"),
-    .macosx, .ios, .watchos, .tvos, .freebsd, .netbsd, .dragonfly => @import("driver_kqueue.zig"),
-    .windows => @import("driver_iocp.zig"),
+pub const driver_type = switch (builtin.os.tag) {
+    .linux => .epoll,
+    .macosx, .ios, .watchos, .tvos, .freebsd, .netbsd, .dragonfly => .kqueue,
+    .windows => .iocp,
     else => @compileError("Unsupported OS"),
+};
+
+pub const Driver = switch (driver_type) {
+    .epoll => @import("driver_epoll.zig"),
+    .kqueue => @import("driver_kqueue.zig"),
+    .iocp => @import("driver_iocp.zig"),
+    else => @compileError("Unsupported Driver"),
 };
 
 pub const DriverOptions = struct {

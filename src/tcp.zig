@@ -7,7 +7,7 @@ const pike = @import("pike.zig");
 
 const Self = @This();
 
-file: pike.File = .{},
+file: pike.File,
 
 pub fn init(driver: *pike.Driver) Self {
     return Self{ .file = .{ .handle = undefined, .driver = driver } };
