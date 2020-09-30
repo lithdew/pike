@@ -10,7 +10,7 @@ fn clientLoop(driver: *pike.Driver) !void {
     var buf: [65536]u8 = undefined;
 
     while (true) {
-        const n = try client.send(&buf);
+        const n = try client.write(&buf);
     }
 }
 
