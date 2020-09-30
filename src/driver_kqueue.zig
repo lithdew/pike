@@ -56,8 +56,8 @@ pub fn poll(self: *Self, timeout: i32) !void {
     var events: [1024]os.Kevent = undefined;
 
     const timeout_spec = os.timespec{
-        .tv_sec = @divTrunc(timeout, time.ns_per_s),
-        .tv_nsec = @rem(timeout, time.ns_per_s),
+        .tv_sec = @divTrunc(timeout, time.ms_per_s),
+        .tv_nsec = @rem(timeout, time.ms_per_s) * time.ns_per_ms,
     };
 
     const num_events = try os.kevent(self.handle, &[0]os.Kevent{}, &events, &timeout_spec);

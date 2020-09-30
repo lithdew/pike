@@ -32,7 +32,7 @@ pub fn register(self: *Self, file: *pike.File, comptime event: pike.Event) !void
 pub fn poll(self: *Self, timeout: i32) !void {
     var events: [1024]os.epoll_event = undefined;
 
-    const num_events = os.epoll_wait(self.handle, &events, @divTrunc(timeout, time.ns_per_ms));
+    const num_events = os.epoll_wait(self.handle, &events, timeout);
 
     for (events[0..num_events]) |e, i| {
         const file = @intToPtr(*pike.File, e.data.ptr);
