@@ -34,6 +34,7 @@ pub fn build(b: *std.build.Builder) !void {
         example.setBuildMode(mode);
         example.setTarget(target);
         example.addPackage(pkg);
+        example.install();
 
         examples_step.dependOn(&example.step);
 

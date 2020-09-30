@@ -81,7 +81,7 @@ pub fn listen(sock: os.fd_t, backlog: u32) ListenError!void {
     }
 }
 
-pub fn accept(sock: os.fd_t, addr: ?*os.sockaddr, addr_size: *os.socklen_t, flags: u32) os.AcceptError!os.fd_t {
+pub fn accept(sock: os.fd_t, addr: *os.sockaddr, addr_size: *os.socklen_t, flags: u32) os.AcceptError!os.fd_t {
     if (builtin.os.tag == .windows) {
         while (true) {
             const rc = funcs.accept(@ptrCast(ws2_32.SOCKET, sock), addr, addr_size);
