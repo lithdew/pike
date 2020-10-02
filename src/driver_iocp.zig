@@ -17,40 +17,22 @@ handle: os.fd_t = windows.INVALID_HANDLE_VALUE,
 afd: os.fd_t = windows.INVALID_HANDLE_VALUE,
 
 fn createAFD() !os.fd_t {
-    const NAME = std.unicode.utf8ToUtf16LeStringLiteral("\\Device\\Afd\\Pike");
+    const NAME = std.unicode.utf8ToUtf16LeStringLiteral("\\\\.\\GLOBALROOT\\Device\\Afd\\Pike");
 
-    var attr = windows.OBJECT_ATTRIBUTES{
-        .Length = @sizeOf(windows.OBJECT_ATTRIBUTES),
-        .RootDirectory = null,
-        .ObjectName = &windows.UNICODE_STRING{
-            .Length = @intCast(windows.USHORT, NAME.len * @divExact(std.meta.bitCount(windows.WCHAR), 8)),
-            .MaximumLength = @intCast(windows.USHORT, NAME.len * @divExact(std.meta.bitCount(windows.WCHAR), 8)),
-            .Buffer = @intToPtr([*]windows.WCHAR, @ptrToInt(NAME)),
-        },
-        .Attributes = 0,
-        .SecurityDescriptor = null,
-        .SecurityQualityOfService = null,
-    };
-
-    var iosb: windows.IO_STATUS_BLOCK = undefined;
-    var afd = windows.INVALID_HANDLE_VALUE;
-
-    const status = windows.ntdll.NtCreateFile(
-        &afd,
+    const handle = windows.kernel32.CreateFileW(
+        NAME[0..],
         windows.SYNCHRONIZE,
-        &attr,
-        &iosb,
-        null,
-        0,
         windows.FILE_SHARE_READ | windows.FILE_SHARE_WRITE,
-        windows.FILE_OPEN,
-        @as(windows.ULONG, 0),
         null,
-        @as(windows.ULONG, 0),
+        windows.OPEN_EXISTING,
+        windows.FILE_FLAG_OVERLAPPED,
+        null,
     );
-    if (status != .SUCCESS) return windows.unexpectedStatus(status);
+    if (handle == windows.INVALID_HANDLE_VALUE) {
+        return windows.unexpectedError(windows.kernel32.GetLastError());
+    }
 
-    return afd;
+    return handle;
 }
 
 pub fn getUnderlyingSocket(socket: ws2_32.SOCKET, ioctl: windows.DWORD) !ws2_32.SOCKET {
@@ -62,9 +44,11 @@ pub fn getUnderlyingSocket(socket: ws2_32.SOCKET, ioctl: windows.DWORD) !ws2_32.
 pub fn getBaseSocket(socket: ws2_32.SOCKET) !ws2_32.SOCKET {
     const result = getUnderlyingSocket(socket, ws2_32.SIO_BASE_HANDLE);
 
-    if (result) |base_socket| { return base_socket; } else |err| {}
+    if (result) |base_socket| {
+        return base_socket;
+    } else |err| {}
 
-    inline for (.{pike.os.SIO_BSP_HANDLE_SELECT, pike.os.SIO_BSP_HANDLE_POLL, pike.os.SIO_BSP_HANDLE}) |ioctl| {
+    inline for (.{ pike.os.SIO_BSP_HANDLE_SELECT, pike.os.SIO_BSP_HANDLE_POLL, pike.os.SIO_BSP_HANDLE }) |ioctl| {
         if (getUnderlyingSocket(socket, ioctl)) |base_socket| {
             if (base_socket != socket) return base_socket;
         } else |err| {}
@@ -105,24 +89,26 @@ pub fn register(self: *Self, file: *pike.File, comptime event: pike.Event) !void
         }},
     };
 
-    const poll_info_ptr = mem.asBytes(&poll_info);
-    const poll_info_len = @intCast(windows.ULONG, @sizeOf(@TypeOf(pike.os.AFD_POLL_INFO)));
+    const poll_info_ptr = @ptrCast(*const c_void, mem.asBytes(&poll_info));
+    const poll_info_len = @intCast(windows.DWORD, @sizeOf(@TypeOf(pike.os.AFD_POLL_INFO)));
 
-    const status = windows.ntdll.NtDeviceIoControlFile(
+    var overlapped: windows.OVERLAPPED = undefined;
+
+    const rc = windows.kernel32.DeviceIoControl(
         self.afd,
-        null,
-        null,
-        null,
-        iosb,
         pike.os.IOCTL_AFD_POLL,
         poll_info_ptr,
         poll_info_len,
         poll_info_ptr,
         poll_info_len,
+        null,
+        &overlapped,
     );
-
-    if (status != .SUCCESS and status != .PENDING) {
-        return windows.unexpectedStatus(status);
+    if (rc != 0) {
+        switch (windows.kernel32.GetLastError()) {
+            .IO_PENDING => {},
+            else => |err| return windows.unexpectedError(err),
+        }
     }
 }
 
