@@ -92,7 +92,7 @@ pub fn register(self: *Self, file: *pike.File, comptime event: pike.Event) !void
         .HandleCount = 1,
         .Exclusive = 0,
         .Handles = [1]pike.os.AFD_HANDLE{.{
-            .Handle = file.handle,
+            .Handle = base_handle,
             .Status = .SUCCESS,
             .Events = events,
         }},
