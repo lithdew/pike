@@ -101,14 +101,6 @@ pub fn register(self: *Self, file: *pike.File, comptime event: pike.Event) !void
     const poll_info_ptr = @ptrCast(*c_void, mem.asBytes(&poll_info));
     const poll_info_len = @intCast(windows.DWORD, @sizeOf(@TypeOf(pike.os.AFD_POLL_INFO)));
 
-    var overlapped: windows.OVERLAPPED = .{
-        .Internal = 0,
-        .InternalHigh = 0,
-        .Offset = 0,
-        .OffsetHigh = 0,
-        .hEvent = null,
-    };
-
     const rc = windows.kernel32.DeviceIoControl(
         self.afd,
         pike.os.IOCTL_AFD_POLL,
@@ -117,7 +109,7 @@ pub fn register(self: *Self, file: *pike.File, comptime event: pike.Event) !void
         poll_info_ptr,
         poll_info_len,
         null,
-        &overlapped,
+        &file.overlapped,
     );
     if (rc != 0) {
         switch (windows.kernel32.GetLastError()) {
@@ -126,13 +118,14 @@ pub fn register(self: *Self, file: *pike.File, comptime event: pike.Event) !void
         }
     }
 
-    std.debug.print("RC: {}, Overlapped: {}\n", .{ rc, overlapped });
+    std.debug.print("RC: {}, Overlapped: {}\n", .{ rc, file.overlapped });
 }
 
 pub fn poll(self: *Self, timeout: i32) !void {
     var events: [1024]pike.os.OVERLAPPED_ENTRY = undefined;
 
     const num_events = try pike.os.GetQueuedCompletionStatusEx(self.handle, &events, @intCast(windows.DWORD, timeout), false);
+    std.debug.print("hello world!\n", .{});
     for (events[0..num_events]) |e, i| {
         std.debug.print("Got an event: {}\n", .{e});
     }
