@@ -11,7 +11,22 @@ pub const OVERLAPPED_ENTRY = extern struct {
     dwNumberOfBytesTransferred: windows.DWORD,
 };
 
+pub const AFD_HANDLE = extern struct {
+    Handle: windows.HANDLE,
+    Events: windows.ULONG,
+    Status: windows.NTSTATUS,
+};
+
+pub const AFD_POLL_INFO = extern struct {
+    Timeout: windows.LARGE_INTEGER,
+    HandleCount: windows.ULONG = 1,
+    Exclusive: windows.ULONG_PTR,
+    Handles: [1]AFD_HANDLE,
+};
+
 const funcs = struct {
+    extern "kernel32" fn SetFileCompletionNotificationModes(FileHandle: windows.HANDLE, Flags: windows.UCHAR) callconv(.Stdcall) windows.BOOL;
+
     extern "kernel32" fn GetQueuedCompletionStatusEx(
         CompletionPort: windows.HANDLE,
         lpCompletionPortEntries: [*]OVERLAPPED_ENTRY,
@@ -26,6 +41,31 @@ const funcs = struct {
     extern "ws2_32" fn accept(s: ws2_32.SOCKET, addr: [*c]std.os.sockaddr, addrlen: [*c]std.os.socklen_t) callconv(.Stdcall) ws2_32.SOCKET;
     extern "ws2_32" fn setsockopt(s: ws2_32.SOCKET, level: c_int, optname: c_int, optval: [*c]const u8, optlen: c_int) callconv(.Stdcall) c_int;
 };
+
+pub const IOCTL_AFD_POLL: windows.ULONG = 0x00012024;
+
+const IOC_VOID = 0x80000000;
+const IOC_OUT = 0x40000000;
+const IOC_IN = 0x80000000;
+const IOC_WS2 = 0x08000000;
+
+pub const SIO_BSP_HANDLE = IOC_OUT | IOC_WS2 | 27;
+pub const SIO_BSP_HANDLE_SELECT = IOC_OUT | IOC_WS2 | 28;
+pub const SIO_BSP_HANDLE_POLL = IOC_OUT | IOC_WS2 | 29;
+
+
+pub const FILE_SKIP_COMPLETION_PORT_ON_SUCCESS: windows.UCHAR = 0x1;
+pub const FILE_SKIP_SET_EVENT_ON_HANDLE: windows.UCHAR = 0x2;
+
+pub fn SetFileCompletionNotificationModes(file_handle: windows.HANDLE, flags: windows.UCHAR) !void {
+    const result = funcs.SetFileCompletionNotificationModes(file_handle, flags);
+
+    if (result == windows.FALSE) {
+        return switch (windows.kernel32.GetLastError()) {
+            else => |err| windows.unexpectedError(err),
+        };
+    }
+}
 
 pub const GetQueuedCompletionStatusError = error{
     Aborted,
