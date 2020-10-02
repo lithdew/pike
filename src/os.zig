@@ -24,6 +24,15 @@ pub const AFD_POLL_INFO = extern struct {
     Handles: [1]AFD_HANDLE,
 };
 
+pub const AFD_POLL_RECEIVE: windows.ULONG = 1 << 0;
+pub const AFD_POLL_RECEIVE_EXPEDITED: windows.ULONG = 1 << 1;
+pub const AFD_POLL_SEND: windows.ULONG = 1 << 2;
+pub const AFD_POLL_DISCONNECT: windows.ULONG = 1 << 3;
+pub const AFD_POLL_ABORT: windows.ULONG = 1 << 4;
+pub const AFD_POLL_LOCAL_CLOSE: windows.ULONG = 1 << 5;
+pub const AFD_POLL_ACCEPT: windows.ULONG = 1 << 7;
+pub const AFD_POLL_CONNECT_FAIL: windows.ULONG = 1 << 8;
+
 const funcs = struct {
     extern "kernel32" fn SetFileCompletionNotificationModes(FileHandle: windows.HANDLE, Flags: windows.UCHAR) callconv(.Stdcall) windows.BOOL;
 
@@ -109,7 +118,7 @@ pub const SO_REUSEADDR = if (builtin.os.tag == .windows) 0x0004 else os.SO_REUSE
 pub fn setsockopt(sock: os.fd_t, level: u32, optname: u32, opt: []const u8) os.SetSockOptError!void {
     if (builtin.os.tag == .windows) {
         const rc = funcs.setsockopt(@ptrCast(ws2_32.SOCKET, sock), @intCast(c_int, level), @intCast(c_int, optname), opt.ptr, @intCast(c_int, opt.len));
-        if (rc != 0) {
+        if (rc == ws2_32.SOCKET_ERROR) {
             return switch (ws2_32.WSAGetLastError()) {
                 .WSAENOTSOCK => unreachable,
                 .WSAEINVAL => unreachable,
@@ -126,7 +135,7 @@ pub fn setsockopt(sock: os.fd_t, level: u32, optname: u32, opt: []const u8) os.S
 pub fn bind(sock: os.fd_t, addr: *const os.sockaddr, len: os.socklen_t) os.BindError!void {
     if (builtin.os.tag == .windows) {
         const rc = funcs.bind(@ptrCast(ws2_32.SOCKET, sock), addr, len);
-        if (rc != 0) {
+        if (rc == ws2_32.SOCKET_ERROR) {
             return switch (ws2_32.WSAGetLastError()) {
                 .WSAEACCES => error.AccessDenied,
                 .WSAEADDRINUSE => error.AddressInUse,
@@ -160,7 +169,7 @@ pub const ListenError = error{
 pub fn listen(sock: os.fd_t, backlog: u32) ListenError!void {
     if (builtin.os.tag == .windows) {
         const rc = funcs.listen(@ptrCast(ws2_32.SOCKET, sock), @intCast(c_int, backlog));
-        if (rc != 0) {
+        if (rc == ws2_32.SOCKET_ERROR) {
             return switch (ws2_32.WSAGetLastError()) {
                 .WSAEADDRINUSE => error.AddressInUse,
                 .WSAENOTSOCK => error.FileDescriptorNotASocket,

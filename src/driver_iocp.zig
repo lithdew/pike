@@ -65,6 +65,7 @@ pub fn init(opts: pike.DriverOptions) !Self {
     errdefer os.close(afd);
 
     _ = try windows.CreateIoCompletionPort(afd, handle, 0, 0);
+
     try pike.os.SetFileCompletionNotificationModes(afd, pike.os.FILE_SKIP_SET_EVENT_ON_HANDLE);
 
     return Self{ .executor = opts.executor, .handle = handle, .afd = afd };
@@ -75,24 +76,38 @@ pub fn deinit(self: *Self) void {
     os.close(self.handle);
 }
 
+pub const READ_EVENTS: windows.ULONG = pike.os.AFD_POLL_RECEIVE | pike.os.AFD_POLL_CONNECT_FAIL | pike.os.AFD_POLL_ACCEPT | pike.os.AFD_POLL_DISCONNECT | pike.os.AFD_POLL_ABORT | pike.os.AFD_POLL_LOCAL_CLOSE;
+pub const WRITE_EVENTS: windows.ULONG = pike.os.AFD_POLL_SEND | pike.os.AFD_POLL_CONNECT_FAIL | pike.os.AFD_POLL_ABORT | pike.os.AFD_POLL_LOCAL_CLOSE;
+
 pub fn register(self: *Self, file: *pike.File, comptime event: pike.Event) !void {
-    _ = try windows.CreateIoCompletionPort(file.handle, self.handle, @ptrToInt(file), 0);
+    comptime var events: windows.ULONG = 0;
+    comptime {
+        if (event.read) events |= READ_EVENTS;
+        if (event.write) events |= WRITE_EVENTS;
+    }
+    const base_handle = try getBaseSocket(@ptrCast(ws2_32.SOCKET, file.handle));
 
     var poll_info = pike.os.AFD_POLL_INFO{
         .Timeout = math.maxInt(windows.LARGE_INTEGER),
-        .NumberOfHandles = 1,
+        .HandleCount = 1,
         .Exclusive = 0,
         .Handles = [1]pike.os.AFD_HANDLE{.{
             .Handle = file.handle,
             .Status = .SUCCESS,
-            .Events = 999,
+            .Events = events,
         }},
     };
 
-    const poll_info_ptr = @ptrCast(*const c_void, mem.asBytes(&poll_info));
+    const poll_info_ptr = @ptrCast(*c_void, mem.asBytes(&poll_info));
     const poll_info_len = @intCast(windows.DWORD, @sizeOf(@TypeOf(pike.os.AFD_POLL_INFO)));
 
-    var overlapped: windows.OVERLAPPED = undefined;
+    var overlapped: windows.OVERLAPPED = .{
+        .Internal = 0,
+        .InternalHigh = 0,
+        .Offset = 0,
+        .OffsetHigh = 0,
+        .hEvent = null,
+    };
 
     const rc = windows.kernel32.DeviceIoControl(
         self.afd,
@@ -110,14 +125,17 @@ pub fn register(self: *Self, file: *pike.File, comptime event: pike.Event) !void
             else => |err| return windows.unexpectedError(err),
         }
     }
+
+    std.debug.print("RC: {}, Overlapped: {}\n", .{ rc, overlapped });
 }
 
 pub fn poll(self: *Self, timeout: i32) !void {
     var events: [1024]pike.os.OVERLAPPED_ENTRY = undefined;
 
     const num_events = try pike.os.GetQueuedCompletionStatusEx(self.handle, &events, @intCast(windows.DWORD, timeout), false);
-    for (events[0..num_events]) |e, i| {}
-    // TODO(kenta): implement
+    for (events[0..num_events]) |e, i| {
+        std.debug.print("Got an event: {}\n", .{e});
+    }
 }
 
 test "IOCP.createAFD()" {
