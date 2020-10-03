@@ -25,26 +25,32 @@ pub const Data = blk: {
             },
             pending: pike.Event = .{},
 
-            pub fn wait(self: *@This(), comptime event: pike.Event) !void {
-                comptime var events: windows.ULONG = 0;
-                comptime {
-                    if (event.read) events |= READ_EVENTS;
-                    if (event.write) events |= WRITE_EVENTS;
+            pub fn refresh(self: *@This(), event: pike.Event) !void {
+                if (self.pending.read == event.read and self.pending.write == event.write) {
+                    return;
                 }
 
-                if (((!self.pending.read and event.read) or (!self.pending.write and event.write))) {
-                    if (self.pending.read or self.pending.write) { // We are already polling; cancel it.
-                        // TODO
-                    }
+                const file = @fieldParentPtr(pike.File, "waker", @fieldParentPtr(Self, "data", self));
 
-                    if (event.read) self.pending.read = true;
-                    if (event.write) self.pending.write = true;
-
-                    const waker = @fieldParentPtr(Self, "data", self);
-                    const file = @fieldParentPtr(pike.File, "waker", waker);
-
-                    try pike.os.refreshAFD(file, events);
+                if (self.pending.read or self.pending.write) { // Cancel previous AFD poll overlapped request if exists.
+                    try pike.os.CancelIoEx(file.handle, &self.request);
                 }
+
+                if (event.read) self.pending.read = true;
+                if (event.write) self.pending.write = true;
+
+                var events: windows.ULONG = 0;
+                if (event.read) events |= READ_EVENTS;
+                if (event.write) events |= WRITE_EVENTS;
+
+                try pike.os.refreshAFD(file, events);
+            }
+
+            pub fn cancel(self: *@This(), comptime event: pike.Event) !void {
+                if (event.read) self.pending.read = false;
+                if (event.write) self.pending.write = false;
+
+                try self.refresh(self.pending);
             }
 
             pub fn reset(self: *@This()) void {
@@ -124,11 +130,12 @@ pub fn wait(self: *Self, comptime event: pike.Event) callconv(.Async) void {
     }
 
     suspend {
+        append(head, &Node{ .frame = @frame() });
+
         if (builtin.os.tag == .windows) {
-            self.data.wait(event) catch |err| @panic(@errorName(err));
+            self.data.refresh(event) catch |err| @panic(@errorName(err));
         }
 
-        append(head, &Node{ .frame = @frame() });
         lock.release();
     }
 }
@@ -143,6 +150,10 @@ pub fn set(self: *Self, comptime event: pike.Event) ?*Node {
 
     const lock = self.lock.acquire();
     defer lock.release();
+
+    if (builtin.os.tag == .windows) {
+        self.data.cancel(event) catch |err| @panic(@errorName(err));
+    }
 
     if (head.* & IS_READY != 0) {
         return null;

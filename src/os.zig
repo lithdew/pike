@@ -78,6 +78,34 @@ pub fn GetQueuedCompletionStatusEx(
     return num_entries_removed;
 }
 
+pub fn CancelIoEx(handle: windows.HANDLE, overlapped: ?windows.LPOVERLAPPED) !void {
+    const success = windows.kernel32.CancelIoEx(handle, @intToPtr(windows.LPOVERLAPPED, @ptrToInt(overlapped)));
+    if (success == windows.FALSE) {
+        return switch (windows.kernel32.GetLastError()) {
+            .NOT_FOUND => error.RequestNotFound,
+            else => |err| windows.unexpectedError(err),
+        };
+    }
+}
+
+// TODO(kenta): make write nonblocking
+
+// pub fn write(fd: os.fd_t, buf: []const u8) !usize {
+//     if (builtin.os.tag == .windows) {
+//         var overlapped = windows.OVERLAPPED{
+//             .Internal = 0,
+//             .InternalHigh = 0,
+//             .Offset = 0,
+//             .OffsetHigh = 0,
+//             .hEvent = null,
+//         }
+//         const len = math.cast(windows.DWORD, bytes.len) catch maxInt(windows.DWORD);
+
+//     } else {
+//         return os.write(fd, buf);
+//     }
+// }
+
 pub fn connect(fd: os.fd_t, addr: *const os.sockaddr, addr_len: os.socklen_t) !void {
     if (builtin.os.tag == .windows) {
         while (true) {

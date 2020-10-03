@@ -53,11 +53,10 @@ pub fn poll(self: *Self, timeout: i32) !void {
 
         std.debug.print("Got an event: {} (read: {}, write: {})\n", .{ e, file.waker.data.pending.read, file.waker.data.pending.write });
 
-        // TODO(kenta): cancel poll request after receiving an event to emulate edge-triggered mode
-
         if (file.waker.data.pending.read) {
             file.trigger(.{ .read = true });
-        } else if (file.waker.data.pending.write) {
+        }
+        if (file.waker.data.pending.write) {
             file.trigger(.{ .write = true });
         }
     }
