@@ -1,37 +1,17 @@
 const std = @import("std");
+const pike = @import("pike.zig");
+
+pub usingnamespace @import("os_bits.zig");
+
 const builtin = std.builtin;
+const math = std.math;
+const mem = std.mem;
+
 const os = std.os;
 const windows = os.windows;
 const ws2_32 = windows.ws2_32;
 
-pub const OVERLAPPED_ENTRY = extern struct {
-    lpCompletionKey: windows.ULONG_PTR,
-    lpOverlapped: windows.LPOVERLAPPED,
-    Internal: windows.ULONG_PTR,
-    dwNumberOfBytesTransferred: windows.DWORD,
-};
-
-pub const AFD_HANDLE = extern struct {
-    Handle: windows.HANDLE,
-    Events: windows.ULONG,
-    Status: windows.NTSTATUS,
-};
-
-pub const AFD_POLL_INFO = extern struct {
-    Timeout: windows.LARGE_INTEGER,
-    HandleCount: windows.ULONG = 1,
-    Exclusive: windows.ULONG_PTR,
-    Handles: [1]AFD_HANDLE,
-};
-
-pub const AFD_POLL_RECEIVE: windows.ULONG = 1 << 0;
-pub const AFD_POLL_RECEIVE_EXPEDITED: windows.ULONG = 1 << 1;
-pub const AFD_POLL_SEND: windows.ULONG = 1 << 2;
-pub const AFD_POLL_DISCONNECT: windows.ULONG = 1 << 3;
-pub const AFD_POLL_ABORT: windows.ULONG = 1 << 4;
-pub const AFD_POLL_LOCAL_CLOSE: windows.ULONG = 1 << 5;
-pub const AFD_POLL_ACCEPT: windows.ULONG = 1 << 7;
-pub const AFD_POLL_CONNECT_FAIL: windows.ULONG = 1 << 8;
+const assert = std.debug.assert;
 
 const funcs = struct {
     extern "kernel32" fn SetFileCompletionNotificationModes(FileHandle: windows.HANDLE, Flags: windows.UCHAR) callconv(.Stdcall) windows.BOOL;
@@ -50,20 +30,6 @@ const funcs = struct {
     extern "ws2_32" fn accept(s: ws2_32.SOCKET, addr: [*c]std.os.sockaddr, addrlen: [*c]std.os.socklen_t) callconv(.Stdcall) ws2_32.SOCKET;
     extern "ws2_32" fn setsockopt(s: ws2_32.SOCKET, level: c_int, optname: c_int, optval: [*c]const u8, optlen: c_int) callconv(.Stdcall) c_int;
 };
-
-pub const IOCTL_AFD_POLL: windows.ULONG = 0x00012024;
-
-const IOC_VOID = 0x80000000;
-const IOC_OUT = 0x40000000;
-const IOC_IN = 0x80000000;
-const IOC_WS2 = 0x08000000;
-
-pub const SIO_BSP_HANDLE = IOC_OUT | IOC_WS2 | 27;
-pub const SIO_BSP_HANDLE_SELECT = IOC_OUT | IOC_WS2 | 28;
-pub const SIO_BSP_HANDLE_POLL = IOC_OUT | IOC_WS2 | 29;
-
-pub const FILE_SKIP_COMPLETION_PORT_ON_SUCCESS: windows.UCHAR = 0x1;
-pub const FILE_SKIP_SET_EVENT_ON_HANDLE: windows.UCHAR = 0x2;
 
 pub fn SetFileCompletionNotificationModes(file_handle: windows.HANDLE, flags: windows.UCHAR) !void {
     const result = funcs.SetFileCompletionNotificationModes(file_handle, flags);
@@ -112,8 +78,36 @@ pub fn GetQueuedCompletionStatusEx(
     return num_entries_removed;
 }
 
-pub const SOL_SOCKET = if (builtin.os.tag == .windows) 0xffff else os.SOL_SOCKET;
-pub const SO_REUSEADDR = if (builtin.os.tag == .windows) 0x0004 else os.SO_REUSEADDR;
+pub fn connect(fd: os.fd_t, addr: *const os.sockaddr, addr_len: os.socklen_t) !void {
+    if (builtin.os.tag == .windows) {
+        while (true) {
+            const rc = ws2_32.connect(@ptrCast(ws2_32.SOCKET, fd), addr, addr_len);
+            if (rc == ws2_32.SOCKET_ERROR) {
+                return switch (ws2_32.WSAGetLastError()) {
+                    .WSAEACCES => error.PermissionDenied,
+                    .WSAEADDRINUSE => error.AddressInUse,
+                    .WSAEINPROGRESS => error.WouldBlock,
+                    .WSAEALREADY => unreachable,
+                    .WSAEAFNOSUPPORT => error.AddressFamilyNotSupported,
+                    .WSAECONNREFUSED => error.ConnectionRefused,
+                    .WSAEFAULT => unreachable,
+                    .WSAEINTR => continue,
+                    .WSAEISCONN => error.AlreadyConnected,
+                    .WSAENETUNREACH => error.NetworkUnreachable,
+                    .WSAEHOSTUNREACH => error.NetworkUnreachable,
+                    .WSAENOTSOCK => unreachable,
+                    .WSAETIMEDOUT => error.ConnectionTimedOut,
+                    .WSAEWOULDBLOCK => error.WouldBlock,
+                    else => |err| return windows.unexpectedWSAError(err),
+                };
+            }
+
+            return;
+        }
+    } else {
+        return os.connect(fd, address);
+    }
+}
 
 pub fn setsockopt(sock: os.fd_t, level: u32, optname: u32, opt: []const u8) os.SetSockOptError!void {
     if (builtin.os.tag == .windows) {
@@ -152,17 +146,8 @@ pub fn bind(sock: os.fd_t, addr: *const os.sockaddr, len: os.socklen_t) os.BindE
 }
 
 pub const ListenError = error{
-    /// Another socket is already listening on the same port.
-    /// For Internet domain sockets, the  socket referred to by sockfd had not previously
-    /// been bound to an address and, upon attempting to bind it to an ephemeral port, it
-    /// was determined that all port numbers in the ephemeral port range are currently in
-    /// use.  See the discussion of /proc/sys/net/ipv4/ip_local_port_range in ip(7).
     AddressInUse,
-
-    /// The file descriptor sockfd does not refer to a socket.
     FileDescriptorNotASocket,
-
-    /// The socket is not of a type that supports the listen() operation.
     OperationNotSupported,
 } || os.UnexpectedError;
 
@@ -206,4 +191,93 @@ pub fn accept(sock: os.fd_t, addr: *os.sockaddr, addr_size: *os.socklen_t, flags
     } else {
         return os.accept(sock, addr, addr_size, flags);
     }
+}
+
+pub fn getUnderlyingSocket(socket: ws2_32.SOCKET, ioctl: windows.DWORD) !ws2_32.SOCKET {
+    var result: [@sizeOf(ws2_32.SOCKET)]u8 = undefined;
+    _ = try windows.WSAIoctl(socket, ioctl, null, result[0..], null, null);
+    return @intToPtr(ws2_32.SOCKET, @bitCast(usize, result));
+}
+
+pub fn getBaseSocket(socket: ws2_32.SOCKET) !ws2_32.SOCKET {
+    const result = getUnderlyingSocket(socket, ws2_32.SIO_BASE_HANDLE);
+
+    if (result) |base_socket| {
+        return base_socket;
+    } else |err| {}
+
+    inline for (.{ SIO_BSP_HANDLE_SELECT, SIO_BSP_HANDLE_POLL, SIO_BSP_HANDLE }) |ioctl| {
+        if (getUnderlyingSocket(socket, ioctl)) |base_socket| {
+            if (base_socket != socket) return base_socket;
+        } else |err| {}
+    }
+
+    return result;
+}
+
+pub fn createAFD() !os.fd_t {
+    const NAME = std.unicode.utf8ToUtf16LeStringLiteral("\\\\.\\GLOBALROOT\\Device\\Afd\\Pike");
+
+    const handle = windows.kernel32.CreateFileW(
+        NAME[0..],
+        windows.SYNCHRONIZE,
+        windows.FILE_SHARE_READ | windows.FILE_SHARE_WRITE,
+        null,
+        windows.OPEN_EXISTING,
+        windows.FILE_FLAG_OVERLAPPED,
+        null,
+    );
+
+    if (handle == windows.INVALID_HANDLE_VALUE) {
+        return windows.unexpectedError(windows.kernel32.GetLastError());
+    }
+
+    return handle;
+}
+
+pub fn refreshAFD(file: *pike.File, events: windows.ULONG) !void {
+    comptime assert(builtin.os.tag == .windows);
+
+    const base_handle = try getBaseSocket(@ptrCast(ws2_32.SOCKET, file.handle));
+
+    var poll_info = AFD_POLL_INFO{
+        .Timeout = math.maxInt(windows.LARGE_INTEGER),
+        .HandleCount = 1,
+        .Exclusive = 0,
+        .Handles = [1]AFD_HANDLE{.{
+            .Handle = base_handle,
+            .Status = .SUCCESS,
+            .Events = events,
+        }},
+    };
+
+    const poll_info_ptr = @ptrCast(*c_void, mem.asBytes(&poll_info));
+    const poll_info_len = @intCast(windows.DWORD, @sizeOf(AFD_POLL_INFO));
+
+    const success = windows.kernel32.DeviceIoControl(
+        file.driver.afd,
+        IOCTL_AFD_POLL,
+        poll_info_ptr,
+        poll_info_len,
+        poll_info_ptr,
+        poll_info_len,
+        null,
+        &file.waker.data.request,
+    );
+
+    if (success == windows.FALSE) {
+        switch (windows.kernel32.GetLastError()) {
+            .IO_PENDING => {},
+            else => |err| return windows.unexpectedError(err),
+        }
+    }
+}
+
+test "os.createAFD()" {
+    if (builtin.os.tag != .windows) {
+        return error.SkipZigTest;
+    }
+
+    const afd = try createAFD();
+    defer os.close(afd);
 }
