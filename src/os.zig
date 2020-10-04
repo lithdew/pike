@@ -88,23 +88,36 @@ pub fn CancelIoEx(handle: windows.HANDLE, overlapped: ?windows.LPOVERLAPPED) !vo
     }
 }
 
-// TODO(kenta): make write nonblocking
+pub fn ReadFile(fd: os.fd_t, buf: []u8, overlapped: *windows.OVERLAPPED) !void {
+    const success = windows.kernel32.ReadFile(fd, buf.ptr, @intCast(windows.DWORD, buf.len), null, overlapped);
+    if (success == windows.FALSE) {
+        return switch (windows.kernel32.GetLastError()) {
+            .IO_PENDING => error.WouldBlock,
+            .OPERATION_ABORTED => error.OperationAborted,
+            .BROKEN_PIPE => error.BrokenPipe,
+            .HANDLE_EOF => {},
+            else => |err| windows.unexpectedError(err),
+        };
+    }
+}
 
-// pub fn write(fd: os.fd_t, buf: []const u8) !usize {
-//     if (builtin.os.tag == .windows) {
-//         var overlapped = windows.OVERLAPPED{
-//             .Internal = 0,
-//             .InternalHigh = 0,
-//             .Offset = 0,
-//             .OffsetHigh = 0,
-//             .hEvent = null,
-//         }
-//         const len = math.cast(windows.DWORD, bytes.len) catch maxInt(windows.DWORD);
+pub fn WriteFile(fd: os.fd_t, buf: []const u8, overlapped: *windows.OVERLAPPED) !void {
+    const len = math.cast(windows.DWORD, buf.len) catch math.maxInt(windows.DWORD);
 
-//     } else {
-//         return os.write(fd, buf);
-//     }
-// }
+    const success = windows.kernel32.WriteFile(fd, buf.ptr, len, null, overlapped);
+    if (success == windows.FALSE) {
+        return switch (windows.kernel32.GetLastError()) {
+            .INVALID_USER_BUFFER => error.SystemResources,
+            .NOT_ENOUGH_MEMORY => error.SystemResources,
+            .OPERATION_ABORTED => error.OperationAborted,
+            .NOT_ENOUGH_QUOTA => error.SystemResources,
+            .IO_PENDING => error.WouldBlock,
+            .BROKEN_PIPE => error.BrokenPipe,
+            .INVALID_HANDLE => error.NotOpenForWriting,
+            else => |err| windows.unexpectedError(err),
+        };
+    }
+}
 
 pub fn connect(fd: os.fd_t, addr: *const os.sockaddr, addr_len: os.socklen_t) !void {
     if (builtin.os.tag == .windows) {
