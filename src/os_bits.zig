@@ -32,6 +32,7 @@ pub const AFD_POLL_CONNECT_FAIL: windows.ULONG = 1 << 8;
 
 pub const SOL_SOCKET = if (builtin.os.tag == .windows) 0xffff else os.SOL_SOCKET;
 pub const SO_REUSEADDR = if (builtin.os.tag == .windows) 0x0004 else os.SO_REUSEADDR;
+pub const SO_ERROR = if (builtin.os.tag == .windows) 0x1007 else os.SO_ERROR;
 
 pub const OVERLAPPED_ENTRY = extern struct {
     lpCompletionKey: windows.ULONG_PTR,

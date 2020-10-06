@@ -28,13 +28,48 @@ const funcs = struct {
     extern "ws2_32" fn bind(s: ws2_32.SOCKET, addr: [*c]const std.os.sockaddr, namelen: std.os.socklen_t) callconv(.Stdcall) c_int;
     extern "ws2_32" fn listen(s: ws2_32.SOCKET, backlog: c_int) callconv(.Stdcall) c_int;
     extern "ws2_32" fn accept(s: ws2_32.SOCKET, addr: [*c]std.os.sockaddr, addrlen: [*c]std.os.socklen_t) callconv(.Stdcall) ws2_32.SOCKET;
-    extern "ws2_32" fn setsockopt(s: ws2_32.SOCKET, level: c_int, optname: c_int, optval: [*c]const u8, optlen: c_int) callconv(.Stdcall) c_int;
+    extern "ws2_32" fn setsockopt(s: ws2_32.SOCKET, level: c_int, optname: c_int, optval: [*c]const u8, optlen: os.socklen_t) callconv(.Stdcall) c_int;
+    extern "ws2_32" fn getsockopt(s: ws2_32.SOCKET, level: c_int, optname: c_int, optval: [*c]u8, optlen: *os.socklen_t) callconv(.Stdcall) c_int;
 };
 
-pub fn SetFileCompletionNotificationModes(file_handle: windows.HANDLE, flags: windows.UCHAR) !void {
-    const result = funcs.SetFileCompletionNotificationModes(file_handle, flags);
+pub fn getsockoptError(fd: os.fd_t) !void {
+    var errno: usize = undefined;
+    var errno_size: os.socklen_t = @sizeOf(@TypeOf(errno));
 
-    if (result == windows.FALSE) {
+    const result = funcs.getsockopt(@ptrCast(ws2_32.SOCKET, fd), SOL_SOCKET, SO_ERROR, @ptrCast([*c]u8, &errno), &errno_size);
+    if (result == ws2_32.SOCKET_ERROR) {
+        switch (ws2_32.WSAGetLastError()) {
+            .WSAEFAULT => unreachable,
+            .WSAENOPROTOOPT => unreachable,
+            .WSAENOTSOCK => unreachable,
+            else => |err| return windows.unexpectedWSAError(err),
+        }
+    }
+
+    if (errno != 0) {
+        return switch (@intToEnum(ws2_32.WinsockError, @truncate(u16, errno))) {
+            .WSAEACCES => error.PermissionDenied,
+            .WSAEADDRINUSE => error.AddressInUse,
+            .WSAEADDRNOTAVAIL => error.AddressNotAvailable,
+            .WSAEAFNOSUPPORT => error.AddressFamilyNotSupported,
+            .WSAEALREADY => unreachable, // The socket is nonblocking and a previous connection attempt has not yet been completed.
+            .WSAEBADF => unreachable, // sockfd is not a valid open file descriptor.
+            .WSAECONNREFUSED => error.ConnectionRefused,
+            .WSAEFAULT => unreachable, // The socket structure address is outside the user's address space.
+            .WSAEISCONN => unreachable, // The socket is already connected.
+            .WSAENETUNREACH => error.NetworkUnreachable,
+            .WSAENOTSOCK => unreachable, // The file descriptor sockfd does not refer to a socket.
+            .WSAEPROTOTYPE => unreachable, // The socket type does not support the requested communications protocol.
+            .WSAETIMEDOUT => error.ConnectionTimedOut,
+            else => |err| windows.unexpectedWSAError(err),
+        };
+    }
+}
+
+pub fn SetFileCompletionNotificationModes(file_handle: windows.HANDLE, flags: windows.UCHAR) !void {
+    const success = funcs.SetFileCompletionNotificationModes(file_handle, flags);
+
+    if (success == windows.FALSE) {
         return switch (windows.kernel32.GetLastError()) {
             else => |err| windows.unexpectedError(err),
         };
@@ -89,7 +124,9 @@ pub fn CancelIoEx(handle: windows.HANDLE, overlapped: ?windows.LPOVERLAPPED) !vo
 }
 
 pub fn ReadFile(fd: os.fd_t, buf: []u8, overlapped: *windows.OVERLAPPED) !void {
-    const success = windows.kernel32.ReadFile(fd, buf.ptr, @intCast(windows.DWORD, buf.len), null, overlapped);
+    const len = math.cast(windows.DWORD, buf.len) catch math.maxInt(windows.DWORD);
+
+    const success = windows.kernel32.ReadFile(fd, buf.ptr, len, null, overlapped);
     if (success == windows.FALSE) {
         return switch (windows.kernel32.GetLastError()) {
             .IO_PENDING => error.WouldBlock,
@@ -152,7 +189,7 @@ pub fn connect(fd: os.fd_t, addr: *const os.sockaddr, addr_len: os.socklen_t) !v
 
 pub fn setsockopt(sock: os.fd_t, level: u32, optname: u32, opt: []const u8) os.SetSockOptError!void {
     if (builtin.os.tag == .windows) {
-        const rc = funcs.setsockopt(@ptrCast(ws2_32.SOCKET, sock), @intCast(c_int, level), @intCast(c_int, optname), opt.ptr, @intCast(c_int, opt.len));
+        const rc = funcs.setsockopt(@ptrCast(ws2_32.SOCKET, sock), @intCast(c_int, level), @intCast(c_int, optname), opt.ptr, @intCast(os.socklen_t, opt.len));
         if (rc == ws2_32.SOCKET_ERROR) {
             return switch (ws2_32.WSAGetLastError()) {
                 .WSAENOTSOCK => unreachable,
