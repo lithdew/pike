@@ -54,7 +54,7 @@ pub fn Stream(comptime Self: type) type {
 
         pub fn write(self: *Self, buf: []const u8) callconv(.Async) !usize {
             while (true) {
-                const n = os.write(self.file.handle, buf) catch |err| switch (err) {
+                const n = pike.os.write(self.file.handle, buf) catch |err| switch (err) {
                     error.WouldBlock => {
                         self.file.waker.wait(.{ .write = true });
                         continue;

@@ -18,6 +18,7 @@ pub fn loop(driver: *pike.Driver, stopped: *bool) callconv(.Async) !void {
     var buf: [65536]u8 = undefined;
     while (true) {
         const n = try socket.write(&buf);
+        if (n == 0) return;
     }
 }
 

@@ -33,36 +33,40 @@ const funcs = struct {
 };
 
 pub fn getsockoptError(fd: os.fd_t) !void {
-    var errno: usize = undefined;
-    var errno_size: os.socklen_t = @sizeOf(@TypeOf(errno));
+    if (builtin.os.tag == .windows) {
+        var errno: usize = undefined;
+        var errno_size: os.socklen_t = @sizeOf(@TypeOf(errno));
 
-    const result = funcs.getsockopt(@ptrCast(ws2_32.SOCKET, fd), SOL_SOCKET, SO_ERROR, @ptrCast([*c]u8, &errno), &errno_size);
-    if (result == ws2_32.SOCKET_ERROR) {
-        switch (ws2_32.WSAGetLastError()) {
-            .WSAEFAULT => unreachable,
-            .WSAENOPROTOOPT => unreachable,
-            .WSAENOTSOCK => unreachable,
-            else => |err| return windows.unexpectedWSAError(err),
+        const result = funcs.getsockopt(@ptrCast(ws2_32.SOCKET, fd), SOL_SOCKET, SO_ERROR, @ptrCast([*c]u8, &errno), &errno_size);
+        if (result == ws2_32.SOCKET_ERROR) {
+            switch (ws2_32.WSAGetLastError()) {
+                .WSAEFAULT => unreachable,
+                .WSAENOPROTOOPT => unreachable,
+                .WSAENOTSOCK => unreachable,
+                else => |err| return windows.unexpectedWSAError(err),
+            }
         }
-    }
 
-    if (errno != 0) {
-        return switch (@intToEnum(ws2_32.WinsockError, @truncate(u16, errno))) {
-            .WSAEACCES => error.PermissionDenied,
-            .WSAEADDRINUSE => error.AddressInUse,
-            .WSAEADDRNOTAVAIL => error.AddressNotAvailable,
-            .WSAEAFNOSUPPORT => error.AddressFamilyNotSupported,
-            .WSAEALREADY => unreachable, // The socket is nonblocking and a previous connection attempt has not yet been completed.
-            .WSAEBADF => unreachable, // sockfd is not a valid open file descriptor.
-            .WSAECONNREFUSED => error.ConnectionRefused,
-            .WSAEFAULT => unreachable, // The socket structure address is outside the user's address space.
-            .WSAEISCONN => unreachable, // The socket is already connected.
-            .WSAENETUNREACH => error.NetworkUnreachable,
-            .WSAENOTSOCK => unreachable, // The file descriptor sockfd does not refer to a socket.
-            .WSAEPROTOTYPE => unreachable, // The socket type does not support the requested communications protocol.
-            .WSAETIMEDOUT => error.ConnectionTimedOut,
-            else => |err| windows.unexpectedWSAError(err),
-        };
+        if (errno != 0) {
+            return switch (@intToEnum(ws2_32.WinsockError, @truncate(u16, errno))) {
+                .WSAEACCES => error.PermissionDenied,
+                .WSAEADDRINUSE => error.AddressInUse,
+                .WSAEADDRNOTAVAIL => error.AddressNotAvailable,
+                .WSAEAFNOSUPPORT => error.AddressFamilyNotSupported,
+                .WSAEALREADY => unreachable, // The socket is nonblocking and a previous connection attempt has not yet been completed.
+                .WSAEBADF => unreachable, // sockfd is not a valid open file descriptor.
+                .WSAECONNREFUSED => error.ConnectionRefused,
+                .WSAEFAULT => unreachable, // The socket structure address is outside the user's address space.
+                .WSAEISCONN => unreachable, // The socket is already connected.
+                .WSAENETUNREACH => error.NetworkUnreachable,
+                .WSAENOTSOCK => unreachable, // The file descriptor sockfd does not refer to a socket.
+                .WSAEPROTOTYPE => unreachable, // The socket type does not support the requested communications protocol.
+                .WSAETIMEDOUT => error.ConnectionTimedOut,
+                else => |err| windows.unexpectedWSAError(err),
+            };
+        }
+    } else {
+        return os.getsockoptError(fd);
     }
 }
 
@@ -348,6 +352,37 @@ pub fn refreshAFD(file: *pike.File, events: windows.ULONG) !void {
         switch (windows.kernel32.GetLastError()) {
             .IO_PENDING => {},
             else => |err| return windows.unexpectedError(err),
+        }
+    }
+}
+
+pub fn write(fd: os.fd_t, bytes: []const u8) os.WriteError!usize {
+    const max_count = switch (builtin.os.tag) {
+        .linux => 0x7ffff000,
+        .macosx, .ios, .watchos, .tvos => math.maxInt(i32),
+        else => math.maxInt(isize),
+    };
+
+    const adjusted_len = math.min(max_count, bytes.len);
+
+    while (true) {
+        const rc = os.system.write(fd, bytes.ptr, adjusted_len);
+        switch (os.errno(rc)) {
+            0 => return @intCast(usize, rc),
+            os.ECONNRESET => return 0,
+            os.EINTR => continue,
+            os.EINVAL => unreachable,
+            os.EFAULT => unreachable,
+            os.EAGAIN => return error.WouldBlock,
+            os.EBADF => return error.NotOpenForWriting, // can be a race condition.
+            os.EDESTADDRREQ => unreachable, // `connect` was never called.
+            os.EDQUOT => return error.DiskQuota,
+            os.EFBIG => return error.FileTooBig,
+            os.EIO => return error.InputOutput,
+            os.ENOSPC => return error.NoSpaceLeft,
+            os.EPERM => return error.AccessDenied,
+            os.EPIPE => return error.BrokenPipe,
+            else => |err| return os.unexpectedErrno(err),
         }
     }
 }
