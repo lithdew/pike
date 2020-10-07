@@ -32,6 +32,13 @@ pub fn init(driver: *pike.Driver, comptime mask: Mask) !Self {
             break :M try os.signalfd(-1, &m, 0);
         },
         .kqueue => M: {
+            var m = mem.zeroes(os.sigset_t);
+            if (mask.terminate) os.darwin.sigaddset(&m, os.SIGTERM);
+            if (mask.interrupt) os.darwin.sigaddset(&m, os.SIGINT);
+            if (mask.quit) os.darwin.sigaddset(&m, os.SIGQUIT);
+            if (mask.hup) os.darwin.sigaddset(&m, os.SIGHUP);
+            assert(os.darwin.sigprocmask(os.SIG_BLOCK, &m, null) == 0);
+
             var handle = try os.kqueue();
 
             var changelist: [5]os.Kevent = [1]os.Kevent{.{
