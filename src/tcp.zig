@@ -53,7 +53,7 @@ pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {
 
     self.file.waker.wait(.{ .write = true });
 
-    if (builtin.os.tag != .windows) try os.getsockoptError(self.file.handle);
+    try pike.os.getsockoptError(self.file.handle);
 
     self.file.schedule(.{ .write = true });
 }

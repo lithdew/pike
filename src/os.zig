@@ -132,7 +132,7 @@ pub fn ReadFile(fd: os.fd_t, buf: []u8, overlapped: *windows.OVERLAPPED) !void {
             .IO_PENDING => error.WouldBlock,
             .OPERATION_ABORTED => error.OperationAborted,
             .BROKEN_PIPE => error.BrokenPipe,
-            .HANDLE_EOF => {},
+            .HANDLE_EOF, .NETNAME_DELETED => {},
             else => |err| windows.unexpectedError(err),
         };
     }
@@ -151,6 +151,7 @@ pub fn WriteFile(fd: os.fd_t, buf: []const u8, overlapped: *windows.OVERLAPPED) 
             .IO_PENDING => error.WouldBlock,
             .BROKEN_PIPE => error.BrokenPipe,
             .INVALID_HANDLE => error.NotOpenForWriting,
+            .HANDLE_EOF, .NETNAME_DELETED => {},
             else => |err| windows.unexpectedError(err),
         };
     }
