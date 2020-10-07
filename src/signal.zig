@@ -82,6 +82,10 @@ pub fn init(driver: *pike.Driver, comptime mask: Mask) !Self {
     return Self{ .file = .{ .handle = handle, .driver = driver } };
 }
 
+pub fn deinit(self: *Self) void {
+    self.file.close();
+}
+
 pub fn wait(self: *Self) callconv(.Async) !void {
     switch (pike.driver_type) {
         .epoll => {
