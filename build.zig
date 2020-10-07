@@ -36,7 +36,7 @@ pub fn build(b: *std.build.Builder) !void {
         example.addPackage(pkg);
         example.install();
 
-        examples_step.dependOn(&example.step);
+        examples_step.dependOn(b.getInstallStep());
 
         const run_cmd = example.run();
         run_cmd.step.dependOn(b.getInstallStep());
