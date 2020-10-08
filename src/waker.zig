@@ -107,6 +107,7 @@ inline fn shift(ptr: *usize) ?*Node {
     head = head.?.next;
     if (head != null) {
         head.?.prev = null;
+        head.?.tail = node.?.tail;
     }
     ptr.* = @ptrToInt(head);
 
