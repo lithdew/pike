@@ -1,8 +1,8 @@
 const std = @import("std");
+const pike = @import("pike.zig");
+
 const os = std.os;
 const mem = std.mem;
-
-const pike = @import("pike.zig");
 
 const assert = std.debug.assert;
 

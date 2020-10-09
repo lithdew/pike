@@ -1,10 +1,12 @@
 const std = @import("std");
 
-const builtin = std.builtin;
-
 const os = std.os;
 const windows = os.windows;
 const ws2_32 = windows.ws2_32;
+
+pub const SOL_SOCKET = 0xffff;
+pub const SO_REUSEADDR = 0x0004;
+pub const SO_ERROR = 0x1007;
 
 pub const IOCTL_AFD_POLL: windows.ULONG = 0x00012024;
 
@@ -29,10 +31,6 @@ pub const AFD_POLL_LOCAL_CLOSE: windows.ULONG = 1 << 5;
 pub const AFD_POLL_CONNECT: windows.ULONG = 1 << 6;
 pub const AFD_POLL_ACCEPT: windows.ULONG = 1 << 7;
 pub const AFD_POLL_CONNECT_FAIL: windows.ULONG = 1 << 8;
-
-pub const SOL_SOCKET = if (builtin.os.tag == .windows) 0xffff else os.SOL_SOCKET;
-pub const SO_REUSEADDR = if (builtin.os.tag == .windows) 0x0004 else os.SO_REUSEADDR;
-pub const SO_ERROR = if (builtin.os.tag == .windows) 0x1007 else os.SO_ERROR;
 
 pub const CTRL_C_EVENT: windows.DWORD = 0;
 pub const CTRL_BREAK_EVENT: windows.DWORD = 1;

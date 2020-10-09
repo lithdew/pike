@@ -1,8 +1,8 @@
 const std = @import("std");
+const pike = @import("pike.zig");
+
 const os = std.os;
 const mem = std.mem;
-
-const pike = @import("pike.zig");
 
 const assert = std.debug.assert;
 
@@ -38,22 +38,22 @@ pub fn init(driver: *pike.Driver, comptime event: Event) !Self {
 
     comptime var changelist_len = 0;
 
-    comptime if (mask.terminate) {
+    comptime if (event.terminate) {
         changelist[changelist_len].ident = os.SIGTERM;
         changelist_len += 1;
     };
 
-    comptime if (mask.interrupt) {
+    comptime if (event.interrupt) {
         changelist[changelist_len].ident = os.SIGINT;
         changelist_len += 1;
     };
 
-    comptime if (mask.quit) {
+    comptime if (event.quit) {
         changelist[changelist_len].ident = os.SIGQUIT;
         changelist_len += 1;
     };
 
-    comptime if (mask.hup) {
+    comptime if (event.hup) {
         changelist[changelist_len].ident = os.SIGHUP;
         changelist_len += 1;
     };
