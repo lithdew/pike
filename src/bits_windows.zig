@@ -36,7 +36,7 @@ pub const CTRL_C_EVENT: windows.DWORD = 0;
 pub const CTRL_BREAK_EVENT: windows.DWORD = 1;
 pub const CTRL_CLOSE_EVENT: windows.DWORD = 2;
 pub const CTRL_LOGOFF_EVENT: windows.DWORD = 5;
-pub const CTRL_SHUTDOWN_EVENT: windows.DWORD = 5;
+pub const CTRL_SHUTDOWN_EVENT: windows.DWORD = 6;
 
 pub const HANDLER_ROUTINE = fn (dwCtrlType: windows.DWORD) callconv(.Stdcall) windows.BOOL;
 

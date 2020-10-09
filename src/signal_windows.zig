@@ -5,14 +5,63 @@ const os = std.os;
 const windows = os.windows;
 
 const mem = std.mem;
+const meta = std.meta;
+
+const Self = @This();
+
+const Event = packed struct {
+    terminate: bool = false,
+    interrupt: bool = false,
+    quit: bool = false,
+    hup: bool = false,
+};
+
+var waker: Waker(Event) = .{};
+
+file: pike.File,
+
+fn handler(dwCtrlType: windows.DWORD) callconv(.Stdcall) windows.BOOL {
+    switch (dwCtrlType) {
+        pike.os.CTRL_C_EVENT, pike.os.CTRL_BREAK_EVENT => {
+            if (waker.set(.{ .interrupt = true, .terminate = true })) |node| {
+                resume node.frame;
+            }
+            return windows.TRUE;
+        },
+        pike.os.CTRL_CLOSE_EVENT => {
+            if (waker.set(.{ .hup = true })) |node| {
+                resume node.frame;
+            }
+            return windows.TRUE;
+        },
+        pike.os.CTRL_LOGOFF_EVENT, pike.os.CTRL_SHUTDOWN_EVENT => {
+            if (waker.set(.{ .quit = true })) |node| {
+                resume node.frame;
+            }
+            return windows.TRUE;
+        },
+        else => return windows.FALSE,
+    }
+}
+
+pub fn init(driver: *pike.Driver, comptime event: Event) !Self {
+    try pike.os.SetConsoleCtrlHandler(handler, true);
+    return Self{ .file = .{ .handle = windows.INVALID_HANDLE_VALUE, .driver = driver } };
+}
+
+pub fn deinit(self: *Self) void {
+    pike.os.SetConsoleCtrlHandler(handler, false) catch |err| @panic(@errorName(err));
+}
+
+pub fn wait(self: *Self) callconv(.Async) !void {
+    waker.wait(.{ .interrupt = true, .terminate = true, .hup = true, .quit = true });
+}
 
 pub fn Waker(comptime Set: type) type {
     const set_count = @bitSizeOf(Set);
     const set_int = meta.Int(false, set_count);
 
     return struct {
-        const Self = @This();
-
         const Node = struct {
             next: [set_count]?*Node = [1]?*Node{null} ** set_count,
             prev: [set_count]?*Node = [1]?*Node{null} ** set_count,
@@ -29,7 +78,7 @@ pub fn Waker(comptime Set: type) type {
             return @intToPtr(?*Node, ptr & ~@as(usize, IS_READY));
         }
 
-        inline fn append(self: *Self, comptime ptr: usize, node: *Node) void {
+        inline fn append(self: *@This(), comptime ptr: usize, node: *Node) void {
             const head = recover(self.head[ptr]);
 
             if (head == null) {
@@ -42,7 +91,7 @@ pub fn Waker(comptime Set: type) type {
             self.tail[ptr] = @ptrToInt(node);
         }
 
-        inline fn shift(self: *Self, comptime ptr: usize) ?*Node {
+        inline fn shift(self: *@This(), comptime ptr: usize) ?*Node {
             const head = recover(self.head[ptr]) orelse unreachable;
 
             self.head[ptr] = @ptrToInt(head.next[ptr]);
@@ -55,7 +104,7 @@ pub fn Waker(comptime Set: type) type {
             return head;
         }
 
-        pub fn wait(self: *Self, comptime event: Set) callconv(.Async) void {
+        pub fn wait(self: *@This(), comptime event: Set) callconv(.Async) void {
             comptime const set_bits = @bitCast(set_int, event);
 
             if (set_bits == @as(set_int, 0)) {
@@ -90,7 +139,7 @@ pub fn Waker(comptime Set: type) type {
             }
         }
 
-        pub fn set(self: *Self, comptime event: Set) ?*Node {
+        pub fn set(self: *@This(), comptime event: Set) ?*Node {
             comptime const set_bits = @bitCast(set_int, event);
 
             const lock = self.lock.acquire();
@@ -126,8 +175,9 @@ pub fn Waker(comptime Set: type) type {
 
                         inline while (k < set_count) : (k += 1) {
                             if (k == i) continue;
+                            if (set_bits & (1 << k) == 0) continue;
 
-                            if (set_bits & (1 << k) != 0 and self.head[k] == @ptrToInt(@as(?*Node, null))) {
+                            if (self.head[k] == @ptrToInt(@as(?*Node, null))) {
                                 self.head[k] = IS_READY;
                             }
                         }
@@ -150,41 +200,4 @@ pub fn Waker(comptime Set: type) type {
             };
         }
     };
-}
-
-var waker: Waker(Event) = .{};
-
-const Self = @This();
-
-const Event = packed struct {
-    terminate: bool = false,
-    interrupt: bool = false,
-    quit: bool = false,
-    hup: bool = false,
-};
-
-file: pike.File,
-
-fn handler(dwCtrlType: windows.DWORD) callconv(.Stdcall) windows.BOOL {
-    std.debug.print("Got console command: {}\n", .{dwCtrlType});
-
-    switch (dwCtrlType) {
-        pike.os.CTRL_C_EVENT => {
-            @atomicStore(bool, &stopped, true, .SeqCst);
-            return windows.TRUE;
-        },
-        else => return windows.FALSE,
-    }
-}
-
-pub fn init(driver: *pike.Driver, comptime event: Event) !Self {
-    return Self{ .file = .{ .handle = windows.INVALID_HANDLE_VALUE, .driver = driver } };
-}
-
-pub fn deinit(self: *Self) void {
-    // TODO(kenta): implement
-}
-
-pub fn wait(self: *Self) callconv(.Async) !void {
-    // TODO(kenta): implement
 }
