@@ -148,7 +148,8 @@ pub fn Waker(comptime Set: type) type {
             comptime var i = 0;
 
             inline while (i < set_count) : (i += 1) {
-                // if (set_bits & (1 << i) == 0) continue;
+                if (set_bits & (1 << i) == 0) continue;
+
                 if (self.head[i] & IS_READY == 0 and self.head[i] != @ptrToInt(@as(?*Node, null))) {
                     const node_ptr = self.shift(i);
 
@@ -172,8 +173,9 @@ pub fn Waker(comptime Set: type) type {
                     comptime var k = 0;
 
                     inline while (k < set_count) : (k += 1) {
-                        if (set_bits & (1 << k) == 0) continue;
                         if (k == i) continue;
+
+                        if (set_bits & (1 << k) == 0) continue;
 
                         if (self.head[k] == @ptrToInt(@as(?*Node, null))) {
                             self.head[k] = IS_READY;
@@ -197,4 +199,39 @@ pub fn Waker(comptime Set: type) type {
             return null;
         }
     };
+}
+
+const testing = std.testing;
+
+test "Waker.wait() / Waker.set()" {
+    const S = Waker(Event);
+
+    var signal = S{};
+
+    var A = async signal.wait(.{ .terminate = true, .quit = true });
+    var B = async signal.wait(.{ .terminate = true, .hup = true });
+
+    testing.expect(signal.head[0] != @ptrToInt(@as(?*S.Node, null)));
+    testing.expect(signal.head[1] == @ptrToInt(@as(?*S.Node, null)));
+    testing.expect(signal.head[2] != @ptrToInt(@as(?*S.Node, null)));
+    testing.expect(signal.head[3] != @ptrToInt(@as(?*S.Node, null)));
+
+    var A_node = signal.set(.{ .terminate = true }) orelse unreachable;
+    resume A_node.frame;
+
+    testing.expect(signal.head[0] != @ptrToInt(@as(?*S.Node, null)));
+    testing.expect(signal.head[1] == @ptrToInt(@as(?*S.Node, null)));
+    testing.expect(signal.head[2] == @ptrToInt(@as(?*S.Node, null)));
+    testing.expect(signal.head[3] != @ptrToInt(@as(?*S.Node, null)));
+
+    var B_node = signal.set(.{ .terminate = true }) orelse unreachable;
+    resume B_node.frame;
+
+    testing.expect(signal.head[0] == @ptrToInt(@as(?*S.Node, null)));
+    testing.expect(signal.head[1] == @ptrToInt(@as(?*S.Node, null)));
+    testing.expect(signal.head[2] == @ptrToInt(@as(?*S.Node, null)));
+    testing.expect(signal.head[3] == @ptrToInt(@as(?*S.Node, null)));
+
+    nosuspend await A;
+    nosuspend await B;
 }

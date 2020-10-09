@@ -11,6 +11,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     const tests = .{
         "waker",
+        "signal_windows",
     };
 
     const test_step = b.step("test", "Runs the tests");
