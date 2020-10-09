@@ -5,7 +5,7 @@ fn wait(driver: *pike.Driver, stopped: *bool) !void {
     defer stopped.* = true;
 
     var signal = try pike.Signal.init(driver, .{ .interrupt = true });
-    defer signal.close();
+    defer signal.deinit();
 
     try driver.register(&signal.file, .{ .read = true });
 

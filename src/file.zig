@@ -21,12 +21,8 @@ pub const File = struct {
             self.driver.executor(self, node.frame);
         }
     }
-};
 
-pub fn Handle(comptime Self: type) type {
-    return struct {
-        pub fn close(self: *Self) void {
-            os.close(self.file.handle);
-        }
-    };
-}
+    pub fn close(self: *Self) void {
+        os.close(self.handle);
+    }
+};

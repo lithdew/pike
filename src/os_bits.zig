@@ -34,6 +34,14 @@ pub const SOL_SOCKET = if (builtin.os.tag == .windows) 0xffff else os.SOL_SOCKET
 pub const SO_REUSEADDR = if (builtin.os.tag == .windows) 0x0004 else os.SO_REUSEADDR;
 pub const SO_ERROR = if (builtin.os.tag == .windows) 0x1007 else os.SO_ERROR;
 
+pub const CTRL_C_EVENT: windows.DWORD = 0;
+pub const CTRL_BREAK_EVENT: windows.DWORD = 1;
+pub const CTRL_CLOSE_EVENT: windows.DWORD = 2;
+pub const CTRL_LOGOFF_EVENT: windows.DWORD = 5;
+pub const CTRL_SHUTDOWN_EVENT: windows.DWORD = 5;
+
+pub const HANDLER_ROUTINE = fn (dwCtrlType: windows.DWORD) callconv(.Stdcall) windows.BOOL;
+
 pub const OVERLAPPED_ENTRY = extern struct {
     lpCompletionKey: windows.ULONG_PTR,
     lpOverlapped: windows.LPOVERLAPPED,

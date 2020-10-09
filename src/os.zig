@@ -30,7 +30,17 @@ const funcs = struct {
     extern "ws2_32" fn accept(s: ws2_32.SOCKET, addr: [*c]std.os.sockaddr, addrlen: [*c]std.os.socklen_t) callconv(.Stdcall) ws2_32.SOCKET;
     extern "ws2_32" fn setsockopt(s: ws2_32.SOCKET, level: c_int, optname: c_int, optval: [*c]const u8, optlen: os.socklen_t) callconv(.Stdcall) c_int;
     extern "ws2_32" fn getsockopt(s: ws2_32.SOCKET, level: c_int, optname: c_int, optval: [*c]u8, optlen: *os.socklen_t) callconv(.Stdcall) c_int;
+    extern "kernel32" fn SetConsoleCtrlHandler(HandlerRoutine: ?HANDLER_ROUTINE, Add: windows.BOOL) callconv(.Stdcall) windows.BOOL;
 };
+
+pub fn SetConsoleCtrlHandler(handler_routine: ?HANDLER_ROUTINE, add: bool) !void {
+    const success = funcs.SetConsoleCtrlHandler(handler_routine, if (add) windows.TRUE else windows.FALSE);
+    if (success == windows.FALSE) {
+        return switch (windows.kernel32.GetLastError()) {
+            else => |err| windows.unexpectedError(err),
+        };
+    }
+}
 
 pub fn getsockoptError(fd: os.fd_t) !void {
     if (builtin.os.tag == .windows) {

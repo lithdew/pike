@@ -5,7 +5,7 @@ fn clientLoop(driver: *pike.Driver) !void {
     var client = pike.TCP.init(driver);
 
     try client.connect(try std.net.Address.parseIp("127.0.0.1", 9000));
-    defer client.close();
+    defer client.deinit();
 
     var buf: [65536]u8 = undefined;
 
@@ -18,7 +18,7 @@ fn serverLoop(driver: *pike.Driver) !void {
     var server = pike.TCP.init(driver);
 
     try server.bind(try std.net.Address.parseIp("127.0.0.1", 9000));
-    defer server.close();
+    defer server.deinit();
 
     try server.listen(128);
 

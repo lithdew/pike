@@ -13,7 +13,7 @@ pub fn loop(driver: *pike.Driver, stopped: *bool) callconv(.Async) !void {
     var listener = pike.TCP.init(driver);
 
     try listener.bind(address);
-    defer listener.close();
+    defer listener.deinit();
 
     try listener.listen(128);
 

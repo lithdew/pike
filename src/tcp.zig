@@ -14,7 +14,10 @@ pub fn init(driver: *pike.Driver) Self {
     return Self{ .file = .{ .handle = undefined, .driver = driver } };
 }
 
-pub usingnamespace pike.Handle(Self);
+pub fn deinit(self: *Self) void {
+    self.file.close();
+}
+
 pub usingnamespace pike.Stream(Self);
 
 pub fn bind(self: *Self, address: net.Address) !void {

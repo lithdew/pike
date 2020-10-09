@@ -160,7 +160,7 @@ pub fn set(self: *Self, comptime event: pike.Event) ?*Node {
         return null;
     }
 
-    if (head.* == 0) {
+    if (head.* == @ptrToInt(@as(?*Node, null))) {
         head.* = IS_READY;
         return null;
     }

@@ -11,7 +11,7 @@ pub fn loop(driver: *pike.Driver, stopped: *bool) callconv(.Async) !void {
     var socket = pike.TCP.init(driver);
 
     try socket.connect(try net.Address.parseIp("127.0.0.1", 9000));
-    defer socket.close();
+    defer socket.deinit();
 
     std.debug.print("Connected!\n", .{});
 
