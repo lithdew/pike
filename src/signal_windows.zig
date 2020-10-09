@@ -26,19 +26,19 @@ fn handler(dwCtrlType: windows.DWORD) callconv(.Stdcall) windows.BOOL {
             if (waker.set(.{ .interrupt = true, .terminate = true })) |node| {
                 resume node.frame;
             }
-            return windows.TRUE;
+            return windows.FALSE;
         },
         pike.os.CTRL_CLOSE_EVENT => {
             if (waker.set(.{ .hup = true })) |node| {
                 resume node.frame;
             }
-            return windows.TRUE;
+            return windows.FALSE;
         },
         pike.os.CTRL_LOGOFF_EVENT, pike.os.CTRL_SHUTDOWN_EVENT => {
             if (waker.set(.{ .quit = true })) |node| {
                 resume node.frame;
             }
-            return windows.TRUE;
+            return windows.FALSE;
         },
         else => return windows.FALSE,
     }
@@ -145,59 +145,56 @@ pub fn Waker(comptime Set: type) type {
             const lock = self.lock.acquire();
             defer lock.release();
 
-            return blk: {
-                comptime var i = 0;
+            comptime var i = 0;
 
-                inline while (i < set_count) : (i += 1) {
-                    if (set_bits & (1 << i) == 0) continue;
+            inline while (i < set_count) : (i += 1) {
+                // if (set_bits & (1 << i) == 0) continue;
+                if (self.head[i] & IS_READY == 0 and self.head[i] != @ptrToInt(@as(?*Node, null))) {
+                    const node_ptr = self.shift(i);
 
-                    if (self.head[i] & IS_READY == 0 and self.head[i] != @ptrToInt(@as(?*Node, null))) {
-                        const node_ptr = self.shift(i);
+                    if (node_ptr) |node| {
+                        comptime var j = 0;
 
-                        if (node_ptr) |node| {
-                            comptime var j = 0;
+                        inline while (j < set_count) : (j += 1) {
+                            if (j == i) continue;
 
-                            inline while (j < set_count) : (j += 1) {
-                                if (j == i) continue;
-
-                                if (node.prev[j]) |prev| {
-                                    prev.next[j] = node.next[j];
-                                } else if (self.head[j] == @ptrToInt(node_ptr)) {
-                                    self.head[j] = @ptrToInt(node.next[j]);
-                                    if (self.head[j] == @ptrToInt(@as(?*Node, null))) {
-                                        self.tail[j] = @ptrToInt(@as(?*Node, null));
-                                    }
+                            if (node.prev[j]) |prev| {
+                                prev.next[j] = node.next[j];
+                            } else if (self.head[j] == @ptrToInt(node_ptr)) {
+                                self.head[j] = @ptrToInt(node.next[j]);
+                                if (self.head[j] == @ptrToInt(@as(?*Node, null))) {
+                                    self.tail[j] = @ptrToInt(@as(?*Node, null));
                                 }
                             }
                         }
+                    }
 
-                        comptime var k = 0;
+                    comptime var k = 0;
 
-                        inline while (k < set_count) : (k += 1) {
-                            if (k == i) continue;
-                            if (set_bits & (1 << k) == 0) continue;
+                    inline while (k < set_count) : (k += 1) {
+                        if (set_bits & (1 << k) == 0) continue;
+                        if (k == i) continue;
 
-                            if (self.head[k] == @ptrToInt(@as(?*Node, null))) {
-                                self.head[k] = IS_READY;
-                            }
+                        if (self.head[k] == @ptrToInt(@as(?*Node, null))) {
+                            self.head[k] = IS_READY;
                         }
-
-                        break :blk node_ptr;
                     }
+
+                    return node_ptr;
                 }
+            }
 
-                comptime var l = 0;
+            comptime var l = 0;
 
-                inline while (l < set_count) : (l += 1) {
-                    if (set_bits & (1 << l) == 0) continue;
+            inline while (l < set_count) : (l += 1) {
+                if (set_bits & (1 << l) == 0) continue;
 
-                    if (self.head[l] == @ptrToInt(@as(?*Node, null))) {
-                        self.head[l] = IS_READY;
-                    }
+                if (self.head[l] == @ptrToInt(@as(?*Node, null))) {
+                    self.head[l] = IS_READY;
                 }
+            }
 
-                break :blk null;
-            };
+            return null;
         }
     };
 }
