@@ -12,7 +12,7 @@ pub fn getsockoptError(fd: os.fd_t) !void {
 }
 
 pub fn connect(fd: os.fd_t, addr: *const os.sockaddr, addr_len: os.socklen_t) !void {
-    return os.connect(fd, address);
+    return os.connect(fd, addr, addr_len);
 }
 
 pub fn setsockopt(sock: os.fd_t, level: u32, optname: u32, opt: []const u8) os.SetSockOptError!void {
