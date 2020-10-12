@@ -21,7 +21,7 @@ pub fn init(opts: pike.DriverOptions) !Self {
     const handle = try windows.CreateIoCompletionPort(windows.INVALID_HANDLE_VALUE, null, undefined, math.maxInt(windows.DWORD));
     errdefer os.close(handle);
 
-    const afd = try pike.os.createAFD();
+    const afd = try pike.os.createAFD("Pike");
     errdefer os.close(afd);
 
     const afd_port = try windows.CreateIoCompletionPort(afd, handle, 0, 0);

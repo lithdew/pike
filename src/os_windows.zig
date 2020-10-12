@@ -111,8 +111,8 @@ pub fn getBaseSocket(socket: ws2_32.SOCKET) !ws2_32.SOCKET {
     return result;
 }
 
-pub fn createAFD() !os.fd_t {
-    const NAME = std.unicode.utf8ToUtf16LeStringLiteral("\\\\.\\GLOBALROOT\\Device\\Afd\\Pike");
+pub fn createAFD(comptime name: []const u8) !os.fd_t {
+    const NAME = std.unicode.utf8ToUtf16LeStringLiteral("\\\\.\\GLOBALROOT\\Device\\Afd\\" ++ name);
 
     const handle = windows.kernel32.CreateFileW(
         NAME[0..],
