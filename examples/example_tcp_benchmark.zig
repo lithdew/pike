@@ -33,6 +33,9 @@ fn serverLoop(driver: *pike.Driver) !void {
 }
 
 pub fn main() !void {
+    try pike.init();
+    defer pike.deinit();
+
     var driver = try pike.Driver.init(.{});
     defer driver.deinit();
 

@@ -23,6 +23,9 @@ pub fn loop(driver: *pike.Driver, stopped: *bool) callconv(.Async) !void {
 }
 
 pub fn main() !void {
+    try pike.init();
+    defer pike.deinit();
+
     var driver = try pike.Driver.init(.{});
     defer driver.deinit();
 

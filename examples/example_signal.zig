@@ -17,6 +17,9 @@ fn wait(driver: *pike.Driver, stopped: *bool) !void {
 }
 
 pub fn main() !void {
+    try pike.init();
+    defer pike.deinit();
+
     var driver = try pike.Driver.init(.{});
     defer driver.deinit();
 
