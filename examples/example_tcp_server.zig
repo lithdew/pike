@@ -8,7 +8,7 @@ const pike = @import("pike");
 pub fn loop(driver: *pike.Driver, stopped: *bool) callconv(.Async) !void {
     defer stopped.* = true;
 
-    const address = try net.Address.parseIp("::", 9000);
+    const address = try net.Address.parseIp("127.0.0.1", 9000);
 
     var listener = pike.TCP.init(driver);
 

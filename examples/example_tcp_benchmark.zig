@@ -11,6 +11,7 @@ fn clientLoop(driver: *pike.Driver) !void {
 
     while (true) {
         const n = try client.write(&buf);
+        if (n == 0) return;
     }
 }
 
