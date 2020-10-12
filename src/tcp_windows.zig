@@ -62,7 +62,7 @@ pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {
 
     try self.handle.driver.register(&self.handle, .{ .read = true, .write = true });
 
-    os.connect(@ptrCast(os.socket_t, self.handle.inner), &address.any, address.getOsSockLen()) catch |err| switch (err) {
+    pike.os.connect(@ptrCast(os.socket_t, self.handle.inner), &address.any, address.getOsSockLen()) catch |err| switch (err) {
         error.WouldBlock => {},
         else => return err,
     };
