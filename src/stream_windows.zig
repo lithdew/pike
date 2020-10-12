@@ -30,10 +30,8 @@ pub fn Stream(comptime Self: type) type {
 
                 self.handle.schedule(.{ .read = true });
 
-                var flag: c_ulong = 1;
-                if (ws2_32.ioctlsocket(@ptrCast(ws2_32.SOCKET, handle), ws2_32.FIONBIO, &flag) != 0) {
-                    return windows.unexpectedWSAError(ws2_32.WSAGetLastError());
-                }
+                // The non-blocking state of `listener` is inherited. See
+                // https://docs.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept#remarks.
 
                 return Connection{ .address = address, .stream = Self{ .handle = pike.Handle{ .inner = handle, .driver = self.handle.driver } } };
             }
