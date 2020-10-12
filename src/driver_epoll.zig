@@ -21,12 +21,12 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-pub fn register(self: *Self, file: *pike.Handle, comptime event: pike.Event) !void {
-    var ev: os.epoll_event = .{ .events = os.EPOLLET, .data = .{ .ptr = @ptrToInt(file) } };
+pub fn register(self: *Self, handle: *pike.Handle, comptime event: pike.Event) !void {
+    var ev: os.epoll_event = .{ .events = os.EPOLLET, .data = .{ .ptr = @ptrToInt(handle) } };
     if (event.read) ev.events |= os.EPOLLIN;
     if (event.write) ev.events |= os.EPOLLOUT;
 
-    try os.epoll_ctl(self.handle, os.EPOLL_CTL_ADD, file.handle, &ev);
+    try os.epoll_ctl(self.handle, os.EPOLL_CTL_ADD, handle.inner, &ev);
 }
 
 pub fn poll(self: *Self, timeout: i32) !void {
@@ -35,15 +35,15 @@ pub fn poll(self: *Self, timeout: i32) !void {
     const num_events = os.epoll_wait(self.handle, &events, timeout);
 
     for (events[0..num_events]) |e, i| {
-        const file = @intToPtr(*pike.Handle, e.data.ptr);
+        const handle = @intToPtr(*pike.Handle, e.data.ptr);
 
         if (e.events & os.EPOLLERR != 0 or e.events & os.EPOLLHUP != 0) {
-            file.trigger(.{ .read = true });
-            file.trigger(.{ .write = true });
+            handle.trigger(.{ .read = true });
+            handle.trigger(.{ .write = true });
         } else if (e.events & os.EPOLLIN != 0) {
-            file.trigger(.{ .read = true });
+            handle.trigger(.{ .read = true });
         } else if (e.events & os.EPOLLOUT != 0) {
-            file.trigger(.{ .write = true });
+            handle.trigger(.{ .write = true });
         }
     }
 }

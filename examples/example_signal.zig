@@ -7,7 +7,7 @@ fn wait(driver: *pike.Driver, stopped: *bool) !void {
     var signal = try pike.Signal.init(driver, .{ .interrupt = true });
     defer signal.deinit();
 
-    try driver.register(&signal.file, .{ .read = true });
+    try driver.register(&signal.handle, .{ .read = true });
 
     std.debug.print("Waiting for interrupt signal.\n", .{});
 

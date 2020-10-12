@@ -8,27 +8,27 @@ const builtin = std.builtin;
 
 const Self = @This();
 
-file: pike.Handle,
+handle: pike.Handle,
 
 pub usingnamespace pike.Stream(Self);
 
 pub fn init(driver: *pike.Driver) Self {
-    return Self{ .file = .{ .handle = -1, .driver = driver } };
+    return Self{ .handle = .{ .inner = -1, .driver = driver } };
 }
 
 pub fn deinit(self: *Self) void {
-    self.file.close();
+    self.handle.close();
 }
 
 pub fn bind(self: *Self, address: net.Address) !void {
-    self.file.handle = try os.socket(address.any.family, os.SOCK_STREAM | os.SOCK_CLOEXEC | os.SOCK_NONBLOCK, os.IPPROTO_TCP);
-    errdefer os.close(self.file.handle);
+    self.handle.inner = try os.socket(address.any.family, os.SOCK_STREAM | os.SOCK_CLOEXEC | os.SOCK_NONBLOCK, os.IPPROTO_TCP);
+    errdefer os.close(self.handle.inner);
 
-    try self.file.driver.register(&self.file, .{ .read = true, .write = true });
+    try self.handle.driver.register(&self.handle, .{ .read = true, .write = true });
 
     // TODO(kenta): do not set SO_REUSEADDR by default
-    try pike.os.setsockopt(self.file.handle, pike.os.SOL_SOCKET, pike.os.SO_REUSEADDR, &mem.toBytes(@as(c_int, 1)));
-    try pike.os.bind(self.file.handle, &address.any, address.getOsSockLen());
+    try pike.os.setsockopt(self.handle.inner, pike.os.SOL_SOCKET, pike.os.SO_REUSEADDR, &mem.toBytes(@as(c_int, 1)));
+    try pike.os.bind(self.handle.inner, &address.any, address.getOsSockLen());
 }
 
 pub fn shutdown(self: *Self, how: i32) !void {
@@ -44,19 +44,19 @@ pub fn shutdown(self: *Self, how: i32) !void {
 }
 
 pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {
-    self.file.handle = try os.socket(address.any.family, os.SOCK_STREAM | os.SOCK_CLOEXEC | os.SOCK_NONBLOCK, os.IPPROTO_TCP);
-    errdefer os.close(self.file.handle);
+    self.handle.inner = try os.socket(address.any.family, os.SOCK_STREAM | os.SOCK_CLOEXEC | os.SOCK_NONBLOCK, os.IPPROTO_TCP);
+    errdefer os.close(self.handle.inner);
 
-    try self.file.driver.register(&self.file, .{ .read = true, .write = true });
+    try self.handle.driver.register(&self.handle, .{ .read = true, .write = true });
 
-    os.connect(@ptrCast(os.socket_t, self.file.handle), &address.any, address.getOsSockLen()) catch |err| switch (err) {
+    os.connect(@ptrCast(os.socket_t, self.handle.inner), &address.any, address.getOsSockLen()) catch |err| switch (err) {
         error.WouldBlock => {},
         else => return err,
     };
 
-    self.file.waker.wait(.{ .write = true });
+    self.handle.waker.wait(.{ .write = true });
 
-    try pike.os.getsockoptError(self.file.handle);
+    try pike.os.getsockoptError(self.handle.inner);
 
-    self.file.schedule(.{ .write = true });
+    self.handle.schedule(.{ .write = true });
 }

@@ -18,7 +18,7 @@ const Event = packed struct {
 
 var waker: Waker(Event) = .{};
 
-file: pike.Handle,
+handle: pike.Handle,
 
 fn handler(dwCtrlType: windows.DWORD) callconv(.Stdcall) windows.BOOL {
     switch (dwCtrlType) {
@@ -46,7 +46,7 @@ fn handler(dwCtrlType: windows.DWORD) callconv(.Stdcall) windows.BOOL {
 
 pub fn init(driver: *pike.Driver, comptime event: Event) !Self {
     try pike.os.SetConsoleCtrlHandler(handler, true);
-    return Self{ .file = .{ .handle = windows.INVALID_HANDLE_VALUE, .driver = driver } };
+    return Self{ .handle = .{ .inner = windows.INVALID_HANDLE_VALUE, .driver = driver } };
 }
 
 pub fn deinit(self: *Self) void {

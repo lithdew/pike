@@ -36,7 +36,7 @@ pub fn deinit(self: *Self) void {
     os.close(self.handle);
 }
 
-pub fn register(self: *Self, file: *pike.Handle, comptime event: pike.Event) !void {
+pub fn register(self: *Self, handle: *pike.Handle, comptime event: pike.Event) !void {
     // This function does nothing on Windows.
 }
 
@@ -49,15 +49,13 @@ pub fn poll(self: *Self, timeout: i32) !void {
     };
 
     for (events[0..num_events]) |e, i| {
-        const file = pike.Handle.fromOverlapped(e.lpOverlapped);
+        const handle = pike.Handle.fromOverlapped(e.lpOverlapped);
 
-        std.debug.print("Got an event: {} (read: {}, write: {})\n", .{ e, file.waker.data.pending.read, file.waker.data.pending.write });
-
-        if (file.waker.data.pending.read) {
-            file.trigger(.{ .read = true });
+        if (handle.waker.data.pending.read) {
+            handle.trigger(.{ .read = true });
         }
-        if (file.waker.data.pending.write) {
-            file.trigger(.{ .write = true });
+        if (handle.waker.data.pending.write) {
+            handle.trigger(.{ .write = true });
         }
     }
 }

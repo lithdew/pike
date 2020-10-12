@@ -15,7 +15,7 @@ const Event = packed struct {
     hup: bool = false,
 };
 
-file: pike.Handle,
+handle: pike.Handle,
 
 pub fn init(driver: *pike.Driver, comptime event: Event) !Self {
     var m = mem.zeroes(os.sigset_t);
@@ -27,19 +27,19 @@ pub fn init(driver: *pike.Driver, comptime event: Event) !Self {
 
     const handle = try os.signalfd(-1, &m, 0);
 
-    return Self{ .file = .{ .handle = handle, .driver = driver } };
+    return Self{ .handle = .{ .inner = handle, .driver = driver } };
 }
 
 pub fn deinit(self: *Self) void {
-    self.file.close();
+    self.handle.close();
 }
 
 pub fn wait(self: *Self) callconv(.Async) !void {
     var buf: [@sizeOf(os.signalfd_siginfo)]u8 = undefined;
     while (true) {
-        const n = os.read(self.file.handle, &buf) catch |err| switch (err) {
+        const n = os.read(self.handle.inner, &buf) catch |err| switch (err) {
             error.WouldBlock => {
-                self.file.waker.wait(.{ .read = true });
+                self.handle.waker.wait(.{ .read = true });
                 continue;
             },
             else => return err,
@@ -47,7 +47,7 @@ pub fn wait(self: *Self) callconv(.Async) !void {
 
         if (n != buf.len) return error.ShortRead;
 
-        self.file.schedule(.{ .read = true });
+        self.handle.schedule(.{ .read = true });
 
         return;
     }

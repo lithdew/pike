@@ -12,7 +12,7 @@ pub fn Stream(comptime Self: type) type {
 
     return struct {
         pub fn listen(self: *Self, backlog: u32) !void {
-            try pike.os.listen(self.file.handle, backlog);
+            try pike.os.listen(self.handle.inner, backlog);
         }
 
         pub fn accept(self: *Self) callconv(.Async) !Connection {
@@ -20,22 +20,22 @@ pub fn Stream(comptime Self: type) type {
             var address_len: os.socklen_t = @sizeOf(net.Address);
 
             while (true) {
-                const handle = pike.os.accept(self.file.handle, &address.any, &address_len, os.SOCK_NONBLOCK | os.SOCK_CLOEXEC) catch |err| switch (err) {
+                const handle = pike.os.accept(self.handle.inner, &address.any, &address_len, os.SOCK_NONBLOCK | os.SOCK_CLOEXEC) catch |err| switch (err) {
                     error.WouldBlock => {
-                        self.file.waker.wait(.{ .read = true });
+                        self.handle.waker.wait(.{ .read = true });
                         continue;
                     },
                     else => return err,
                 };
 
-                self.file.schedule(.{ .read = true });
+                self.handle.schedule(.{ .read = true });
 
                 var flag: c_ulong = 1;
                 if (ws2_32.ioctlsocket(@ptrCast(ws2_32.SOCKET, handle), ws2_32.FIONBIO, &flag) != 0) {
                     return windows.unexpectedWSAError(ws2_32.WSAGetLastError());
                 }
 
-                return Connection{ .address = address, .stream = Self{ .file = pike.Handle{ .handle = handle, .driver = self.file.driver } } };
+                return Connection{ .address = address, .stream = Self{ .handle = pike.Handle{ .inner = handle, .driver = self.handle.driver } } };
             }
         }
 
@@ -48,12 +48,12 @@ pub fn Stream(comptime Self: type) type {
                 .hEvent = null,
             };
 
-            pike.os.ReadFile(self.file.handle, buf, &overlapped) catch |err| switch (err) {
-                error.WouldBlock => self.file.waker.wait(.{ .read = true }),
+            pike.os.ReadFile(self.handle.inner, buf, &overlapped) catch |err| switch (err) {
+                error.WouldBlock => self.handle.waker.wait(.{ .read = true }),
                 else => return err,
             };
 
-            self.file.schedule(.{ .read = true });
+            self.handle.schedule(.{ .read = true });
 
             return overlapped.InternalHigh;
         }
@@ -67,12 +67,12 @@ pub fn Stream(comptime Self: type) type {
                 .hEvent = null,
             };
 
-            pike.os.WriteFile(self.file.handle, buf, &overlapped) catch |err| switch (err) {
-                error.WouldBlock => self.file.waker.wait(.{ .write = true }),
+            pike.os.WriteFile(self.handle.inner, buf, &overlapped) catch |err| switch (err) {
+                error.WouldBlock => self.handle.waker.wait(.{ .write = true }),
                 else => return err,
             };
 
-            self.file.schedule(.{ .write = true });
+            self.handle.schedule(.{ .write = true });
 
             return overlapped.InternalHigh;
         }

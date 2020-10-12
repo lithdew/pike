@@ -131,10 +131,10 @@ pub fn createAFD() !os.fd_t {
     return handle;
 }
 
-pub fn refreshAFD(file: *pike.Handle, events: windows.ULONG) !void {
+pub fn refreshAFD(handle: *pike.Handle, events: windows.ULONG) !void {
     comptime assert(builtin.os.tag == .windows);
 
-    const base_handle = try getBaseSocket(@ptrCast(ws2_32.SOCKET, file.handle));
+    const base_handle = try getBaseSocket(@ptrCast(ws2_32.SOCKET, handle.inner));
 
     var poll_info = AFD_POLL_INFO{
         .Timeout = math.maxInt(windows.LARGE_INTEGER),
@@ -151,14 +151,14 @@ pub fn refreshAFD(file: *pike.Handle, events: windows.ULONG) !void {
     const poll_info_len = @intCast(windows.DWORD, @sizeOf(AFD_POLL_INFO));
 
     const success = windows.kernel32.DeviceIoControl(
-        file.driver.afd,
+        handle.driver.afd,
         IOCTL_AFD_POLL,
         poll_info_ptr,
         poll_info_len,
         poll_info_ptr,
         poll_info_len,
         null,
-        &file.waker.data.request,
+        &handle.waker.data.request,
     );
 
     if (success == windows.FALSE) {

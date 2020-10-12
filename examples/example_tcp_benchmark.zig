@@ -23,7 +23,7 @@ fn serverLoop(driver: *pike.Driver) !void {
     try server.listen(128);
 
     var client = try server.accept();
-    try driver.register(&client.stream.file, .{ .read = true, .write = true });
+    try driver.register(&client.stream.handle, .{ .read = true, .write = true });
 
     var buf: [65536]u8 = undefined;
     while (true) {

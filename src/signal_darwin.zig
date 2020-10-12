@@ -15,7 +15,7 @@ const Event = packed struct {
     hup: bool = false,
 };
 
-file: pike.Handle,
+handle: pike.Handle,
 
 pub fn init(driver: *pike.Driver, comptime event: Event) !Self {
     var m = mem.zeroes(os.sigset_t);
@@ -60,24 +60,24 @@ pub fn init(driver: *pike.Driver, comptime event: Event) !Self {
 
     assert((try os.kevent(handle, changelist[0..changelist_len], &[0]os.Kevent{}, null)) == 0);
 
-    return Self{ .file = .{ .handle = handle, .driver = driver } };
+    return Self{ .handle = .{ .inner = handle, .driver = driver } };
 }
 
 pub fn deinit(self: *Self) void {
-    self.file.close();
+    self.handle.close();
 }
 
 pub fn wait(self: *Self) callconv(.Async) !void {
     while (true) {
         var events: [1]os.Kevent = undefined;
 
-        switch (try os.kevent(self.file.handle, &[0]os.Kevent{}, &events, &os.timespec{ .tv_sec = 0, .tv_nsec = 0 })) {
+        switch (try os.kevent(self.handle.inner, &[0]os.Kevent{}, &events, &os.timespec{ .tv_sec = 0, .tv_nsec = 0 })) {
             0 => { // Wait for a signal to be received.
-                self.file.waker.wait(.{ .read = true });
+                self.handle.waker.wait(.{ .read = true });
                 continue;
             },
             1 => { // An expected signal was received.
-                self.file.schedule(.{ .read = true });
+                self.handle.schedule(.{ .read = true });
                 return;
             },
             else => { // An unexpected number of events was received.

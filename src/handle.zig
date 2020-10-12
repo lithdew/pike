@@ -10,7 +10,7 @@ const windows = os.windows;
 pub const Handle = struct {
     const Self = @This();
 
-    handle: os.fd_t,
+    inner: os.fd_t,
     driver: *pike.Driver,
     waker: Waker = .{},
 
@@ -31,7 +31,7 @@ pub const Handle = struct {
     }
 
     pub fn close(self: *Self) void {
-        os.close(self.handle);
+        os.close(self.inner);
     }
 };
 
@@ -58,10 +58,10 @@ const Waker = struct {
                         return;
                     }
 
-                    const file = @fieldParentPtr(pike.Handle, "waker", @fieldParentPtr(Self, "data", self));
+                    const handle = @fieldParentPtr(pike.Handle, "waker", @fieldParentPtr(Self, "data", self));
 
                     if (self.pending.read or self.pending.write) { // Cancel previous AFD poll overlapped request if exists.
-                        try pike.os.CancelIoEx(file.handle, &self.request);
+                        try pike.os.CancelIoEx(handle.inner, &self.request);
                     }
 
                     if (event.read) self.pending.read = true;
@@ -71,7 +71,7 @@ const Waker = struct {
                     if (event.read) events |= READ_EVENTS;
                     if (event.write) events |= WRITE_EVENTS;
 
-                    try pike.os.refreshAFD(file, events);
+                    try pike.os.refreshAFD(handle, events);
                 }
 
                 pub fn cancel(self: *@This(), comptime event: pike.Event) !void {

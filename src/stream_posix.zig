@@ -9,7 +9,7 @@ pub fn Stream(comptime Self: type) type {
 
     return struct {
         pub fn listen(self: *Self, backlog: u32) !void {
-            try pike.os.listen(self.file.handle, backlog);
+            try pike.os.listen(self.handle.inner, backlog);
         }
 
         pub fn accept(self: *Self) callconv(.Async) !Connection {
@@ -17,31 +17,31 @@ pub fn Stream(comptime Self: type) type {
             var address_len: os.socklen_t = @sizeOf(net.Address);
 
             while (true) {
-                const handle = pike.os.accept(self.file.handle, &address.any, &address_len, os.SOCK_NONBLOCK | os.SOCK_CLOEXEC) catch |err| switch (err) {
+                const handle = pike.os.accept(self.handle.inner, &address.any, &address_len, os.SOCK_NONBLOCK | os.SOCK_CLOEXEC) catch |err| switch (err) {
                     error.WouldBlock => {
-                        self.file.waker.wait(.{ .read = true });
+                        self.handle.waker.wait(.{ .read = true });
                         continue;
                     },
                     else => return err,
                 };
 
-                self.file.schedule(.{ .read = true });
+                self.handle.schedule(.{ .read = true });
 
-                return Connection{ .address = address, .stream = Self{ .file = pike.Handle{ .handle = handle, .driver = self.file.driver } } };
+                return Connection{ .address = address, .stream = Self{ .handle = pike.Handle{ .inner = handle, .driver = self.handle.driver } } };
             }
         }
 
         pub fn read(self: *Self, buf: []u8) callconv(.Async) !usize {
             while (true) {
-                const n = pike.os.read(self.file.handle, buf) catch |err| switch (err) {
+                const n = pike.os.read(self.handle.inner, buf) catch |err| switch (err) {
                     error.WouldBlock => {
-                        self.file.waker.wait(.{ .read = true });
+                        self.handle.waker.wait(.{ .read = true });
                         continue;
                     },
                     else => return err,
                 };
 
-                self.file.schedule(.{ .read = true });
+                self.handle.schedule(.{ .read = true });
 
                 return n;
             }
@@ -49,15 +49,15 @@ pub fn Stream(comptime Self: type) type {
 
         pub fn write(self: *Self, buf: []const u8) callconv(.Async) !usize {
             while (true) {
-                const n = pike.os.write(self.file.handle, buf) catch |err| switch (err) {
+                const n = pike.os.write(self.handle.inner, buf) catch |err| switch (err) {
                     error.WouldBlock => {
-                        self.file.waker.wait(.{ .write = true });
+                        self.handle.waker.wait(.{ .write = true });
                         continue;
                     },
                     else => return err,
                 };
 
-                self.file.schedule(.{ .write = true });
+                self.handle.schedule(.{ .write = true });
 
                 return n;
             }

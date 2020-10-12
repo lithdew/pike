@@ -23,7 +23,7 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-pub fn register(self: *Self, file: *pike.Handle, comptime event: pike.Event) !void {
+pub fn register(self: *Self, handle: *pike.Handle, comptime event: pike.Event) !void {
     var changelist: [2]os.Kevent = [1]os.Kevent{.{
         .ident = undefined,
         .filter = undefined,
@@ -45,8 +45,8 @@ pub fn register(self: *Self, file: *pike.Handle, comptime event: pike.Event) !vo
     };
 
     for (changelist[0..changelist_len]) |*evt| {
-        evt.ident = @intCast(usize, file.handle);
-        evt.udata = @ptrToInt(file);
+        evt.ident = @intCast(usize, handle.inner);
+        evt.udata = @ptrToInt(handle);
     }
 
     assert((try os.kevent(self.handle, changelist[0..changelist_len], &[0]os.Kevent{}, null)) == 0);
@@ -63,15 +63,15 @@ pub fn poll(self: *Self, timeout: i32) !void {
     const num_events = try os.kevent(self.handle, &[0]os.Kevent{}, &events, &timeout_spec);
 
     for (events[0..num_events]) |e, i| {
-        const file = @intToPtr(*pike.Handle, e.udata);
+        const handle = @intToPtr(*pike.Handle, e.udata);
 
         if (e.flags & os.EV_ERROR != 0 or e.flags & os.EV_EOF != 0) {
-            file.trigger(.{ .read = true });
-            file.trigger(.{ .write = true });
+            handle.trigger(.{ .read = true });
+            handle.trigger(.{ .write = true });
         } else if (e.filter == os.EVFILT_READ) {
-            file.trigger(.{ .read = true });
+            handle.trigger(.{ .read = true });
         } else if (e.filter == os.EVFILT_WRITE) {
-            file.trigger(.{ .write = true });
+            handle.trigger(.{ .write = true });
         }
     }
 }
