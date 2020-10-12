@@ -61,24 +61,24 @@ const Waker = struct {
                     const handle = @fieldParentPtr(pike.Handle, "waker", @fieldParentPtr(Self, "data", self));
 
                     if (self.pending.read or self.pending.write) { // Cancel previous AFD poll overlapped request if exists.
-                        try pike.os.CancelIoEx(handle.inner, &self.request);
+                        pike.os.CancelIoEx(handle.driver.afd, &self.request) catch |err| switch (err) {
+                            error.RequestNotFound => {},
+                            else => return err,
+                        };
                     }
 
-                    if (event.read) self.pending.read = true;
-                    if (event.write) self.pending.write = true;
+                    self.pending = event;
 
                     var events: windows.ULONG = 0;
-                    if (event.read) events |= READ_EVENTS;
-                    if (event.write) events |= WRITE_EVENTS;
 
-                    try pike.os.refreshAFD(handle, events);
-                }
+                    if (self.pending.read) {
+                        events |= READ_EVENTS;
+                    }
+                    if (self.pending.write) {
+                        events |= WRITE_EVENTS;
+                    }
 
-                pub fn cancel(self: *@This(), comptime event: pike.Event) !void {
-                    if (event.read) self.pending.read = false;
-                    if (event.write) self.pending.write = false;
-
-                    try self.refresh(self.pending);
+                    try pike.os.refreshAFD(handle.driver.afd, handle.inner, &self.request, events);
                 }
 
                 pub fn reset(self: *@This()) void {
@@ -162,7 +162,13 @@ const Waker = struct {
             append(head, &Node{ .frame = @frame() });
 
             if (builtin.os.tag == .windows) {
-                self.data.refresh(event) catch |err| @panic(@errorName(err));
+                var status = self.data.pending;
+                if (event.read) status.read = true;
+                if (event.write) status.write = true;
+
+                self.data.refresh(status) catch |err| {
+                    @panic(@errorName(err));
+                };
             }
 
             lock.release();
@@ -181,7 +187,13 @@ const Waker = struct {
         defer lock.release();
 
         if (builtin.os.tag == .windows) {
-            self.data.cancel(event) catch |err| @panic(@errorName(err));
+            var status = self.data.pending;
+            if (event.read) status.read = false;
+            if (event.write) status.write = false;
+
+            self.data.refresh(status) catch |err| {
+                @panic(@errorName(err));
+            };
         }
 
         if (head.* & IS_READY != 0) {

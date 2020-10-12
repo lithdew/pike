@@ -51,10 +51,11 @@ pub fn poll(self: *Self, timeout: i32) !void {
     for (events[0..num_events]) |e, i| {
         const handle = pike.Handle.fromOverlapped(e.lpOverlapped);
 
-        if (handle.waker.data.pending.read) {
+        if (handle.waker.data.pending.read and handle.waker.data.pending.write) {
+            handle.trigger(.{ .read = true, .write = true });
+        } else if (handle.waker.data.pending.read) {
             handle.trigger(.{ .read = true });
-        }
-        if (handle.waker.data.pending.write) {
+        } else if (handle.waker.data.pending.write) {
             handle.trigger(.{ .write = true });
         }
     }

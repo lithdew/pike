@@ -28,6 +28,9 @@ const funcs = struct {
     extern "ws2_32" fn accept(s: ws2_32.SOCKET, addr: [*c]std.os.sockaddr, addrlen: [*c]std.os.socklen_t) callconv(.Stdcall) ws2_32.SOCKET;
     extern "ws2_32" fn setsockopt(s: ws2_32.SOCKET, level: c_int, optname: c_int, optval: [*c]const u8, optlen: os.socklen_t) callconv(.Stdcall) c_int;
     extern "ws2_32" fn getsockopt(s: ws2_32.SOCKET, level: c_int, optname: c_int, optval: [*c]u8, optlen: *os.socklen_t) callconv(.Stdcall) c_int;
+
+    extern "kernel32" fn CancelIoEx(hFile: windows.HANDLE, lpOverlapped: ?windows.LPOVERLAPPED) callconv(.Stdcall) windows.BOOL;
+
     extern "kernel32" fn SetConsoleCtrlHandler(HandlerRoutine: ?HANDLER_ROUTINE, Add: windows.BOOL) callconv(.Stdcall) windows.BOOL;
 };
 
@@ -129,8 +132,8 @@ pub fn createAFD(comptime name: []const u8) !os.fd_t {
     return handle;
 }
 
-pub fn refreshAFD(handle: *pike.Handle, events: windows.ULONG) !void {
-    const base_handle = try getBaseSocket(@ptrCast(ws2_32.SOCKET, handle.inner));
+pub fn refreshAFD(afd: os.fd_t, handle: os.fd_t, overlapped: windows.LPOVERLAPPED, events: windows.ULONG) !void {
+    const base_handle = try getBaseSocket(@ptrCast(ws2_32.SOCKET, handle));
 
     var poll_info = AFD_POLL_INFO{
         .Timeout = math.maxInt(windows.LARGE_INTEGER),
@@ -147,14 +150,14 @@ pub fn refreshAFD(handle: *pike.Handle, events: windows.ULONG) !void {
     const poll_info_len = @intCast(windows.DWORD, @sizeOf(AFD_POLL_INFO));
 
     const success = windows.kernel32.DeviceIoControl(
-        handle.driver.afd,
+        afd,
         IOCTL_AFD_POLL,
         poll_info_ptr,
         poll_info_len,
         poll_info_ptr,
         poll_info_len,
         null,
-        &handle.waker.data.request,
+        overlapped,
     );
 
     if (success == windows.FALSE) {
@@ -166,7 +169,7 @@ pub fn refreshAFD(handle: *pike.Handle, events: windows.ULONG) !void {
 }
 
 pub fn CancelIoEx(handle: windows.HANDLE, overlapped: ?windows.LPOVERLAPPED) !void {
-    const success = windows.kernel32.CancelIoEx(handle, @intToPtr(windows.LPOVERLAPPED, @ptrToInt(overlapped)));
+    const success = funcs.CancelIoEx(handle, overlapped);
     if (success == windows.FALSE) {
         return switch (windows.kernel32.GetLastError()) {
             .NOT_FOUND => error.RequestNotFound,
