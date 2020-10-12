@@ -35,7 +35,7 @@ pub fn Stream(comptime Self: type) type {
                     return windows.unexpectedWSAError(ws2_32.WSAGetLastError());
                 }
 
-                return Connection{ .address = address, .stream = Self{ .file = pike.File{ .handle = handle, .driver = self.file.driver } } };
+                return Connection{ .address = address, .stream = Self{ .file = pike.Handle{ .handle = handle, .driver = self.file.driver } } };
             }
         }
 

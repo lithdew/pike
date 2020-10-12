@@ -15,7 +15,7 @@ const Event = packed struct {
     hup: bool = false,
 };
 
-file: pike.File,
+file: pike.Handle,
 
 pub fn init(driver: *pike.Driver, comptime event: Event) !Self {
     var m = mem.zeroes(os.sigset_t);

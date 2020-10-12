@@ -27,7 +27,7 @@ pub fn Stream(comptime Self: type) type {
 
                 self.file.schedule(.{ .read = true });
 
-                return Connection{ .address = address, .stream = Self{ .file = pike.File{ .handle = handle, .driver = self.file.driver } } };
+                return Connection{ .address = address, .stream = Self{ .file = pike.Handle{ .handle = handle, .driver = self.file.driver } } };
             }
         }
 

@@ -11,7 +11,7 @@ const builtin = std.builtin;
 
 const Self = @This();
 
-file: pike.File,
+file: pike.Handle,
 
 pub usingnamespace pike.Stream(Self);
 

@@ -131,7 +131,7 @@ pub fn createAFD() !os.fd_t {
     return handle;
 }
 
-pub fn refreshAFD(file: *pike.File, events: windows.ULONG) !void {
+pub fn refreshAFD(file: *pike.Handle, events: windows.ULONG) !void {
     comptime assert(builtin.os.tag == .windows);
 
     const base_handle = try getBaseSocket(@ptrCast(ws2_32.SOCKET, file.handle));

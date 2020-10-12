@@ -23,7 +23,7 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-pub fn register(self: *Self, file: *pike.File, comptime event: pike.Event) !void {
+pub fn register(self: *Self, file: *pike.Handle, comptime event: pike.Event) !void {
     var changelist: [2]os.Kevent = [1]os.Kevent{.{
         .ident = undefined,
         .filter = undefined,
@@ -63,7 +63,7 @@ pub fn poll(self: *Self, timeout: i32) !void {
     const num_events = try os.kevent(self.handle, &[0]os.Kevent{}, &events, &timeout_spec);
 
     for (events[0..num_events]) |e, i| {
-        const file = @intToPtr(*pike.File, e.udata);
+        const file = @intToPtr(*pike.Handle, e.udata);
 
         if (e.flags & os.EV_ERROR != 0 or e.flags & os.EV_EOF != 0) {
             file.trigger(.{ .read = true });

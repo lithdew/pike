@@ -21,7 +21,7 @@ pub fn deinit(self: *Self) void {
     self.* = undefined;
 }
 
-pub fn register(self: *Self, file: *pike.File, comptime event: pike.Event) !void {
+pub fn register(self: *Self, file: *pike.Handle, comptime event: pike.Event) !void {
     var ev: os.epoll_event = .{ .events = os.EPOLLET, .data = .{ .ptr = @ptrToInt(file) } };
     if (event.read) ev.events |= os.EPOLLIN;
     if (event.write) ev.events |= os.EPOLLOUT;
@@ -35,7 +35,7 @@ pub fn poll(self: *Self, timeout: i32) !void {
     const num_events = os.epoll_wait(self.handle, &events, timeout);
 
     for (events[0..num_events]) |e, i| {
-        const file = @intToPtr(*pike.File, e.data.ptr);
+        const file = @intToPtr(*pike.Handle, e.data.ptr);
 
         if (e.events & os.EPOLLERR != 0 or e.events & os.EPOLLHUP != 0) {
             file.trigger(.{ .read = true });

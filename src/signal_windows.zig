@@ -18,7 +18,7 @@ const Event = packed struct {
 
 var waker: Waker(Event) = .{};
 
-file: pike.File,
+file: pike.Handle,
 
 fn handler(dwCtrlType: windows.DWORD) callconv(.Stdcall) windows.BOOL {
     switch (dwCtrlType) {

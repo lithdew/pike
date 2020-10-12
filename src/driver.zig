@@ -24,8 +24,8 @@ pub const Event = packed struct {
     write: bool = false,
 };
 
-pub const Executor = fn (*pike.File, frame: anyframe) void;
+pub const Executor = fn (*pike.Handle, frame: anyframe) void;
 
-pub fn defaultExecutor(file: *pike.File, frame: anyframe) void {
+pub fn defaultExecutor(file: *pike.Handle, frame: anyframe) void {
     resume frame;
 }
