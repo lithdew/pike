@@ -9,8 +9,6 @@ const mem = std.mem;
 const math = std.math;
 const builtin = std.builtin;
 
-const assert = std.debug.assert;
-
 pub usingnamespace @import("bits_windows.zig");
 
 const funcs = struct {
@@ -132,8 +130,6 @@ pub fn createAFD(comptime name: []const u8) !os.fd_t {
 }
 
 pub fn refreshAFD(handle: *pike.Handle, events: windows.ULONG) !void {
-    comptime assert(builtin.os.tag == .windows);
-
     const base_handle = try getBaseSocket(@ptrCast(ws2_32.SOCKET, handle.inner));
 
     var poll_info = AFD_POLL_INFO{
