@@ -2,10 +2,12 @@ const std = @import("std");
 const pike = @import("pike.zig");
 
 const builtin = std.builtin;
+const math = std.math;
 const mem = std.mem;
 
 const os = std.os;
 const windows = os.windows;
+const ws2_32 = windows.ws2_32;
 
 pub const Handle = struct {
     const Self = @This();
@@ -38,65 +40,80 @@ pub const Handle = struct {
 const Waker = struct {
     const Self = @This();
 
-    pub const READ_EVENTS: windows.ULONG = pike.os.AFD_POLL_RECEIVE | pike.os.AFD_POLL_CONNECT_FAIL | pike.os.AFD_POLL_ACCEPT | pike.os.AFD_POLL_DISCONNECT | pike.os.AFD_POLL_ABORT | pike.os.AFD_POLL_LOCAL_CLOSE;
-    pub const WRITE_EVENTS: windows.ULONG = pike.os.AFD_POLL_SEND | pike.os.AFD_POLL_CONNECT_FAIL | pike.os.AFD_POLL_ABORT | pike.os.AFD_POLL_LOCAL_CLOSE;
+    pub const Data = if (builtin.os.tag == .windows)
+        struct {
+            pub const READ_EVENTS: windows.ULONG = pike.os.AFD_POLL_RECEIVE | pike.os.AFD_POLL_CONNECT_FAIL | pike.os.AFD_POLL_ACCEPT | pike.os.AFD_POLL_DISCONNECT | pike.os.AFD_POLL_ABORT | pike.os.AFD_POLL_LOCAL_CLOSE;
+            pub const WRITE_EVENTS: windows.ULONG = pike.os.AFD_POLL_SEND | pike.os.AFD_POLL_CONNECT_FAIL | pike.os.AFD_POLL_ABORT | pike.os.AFD_POLL_LOCAL_CLOSE;
 
-    pub const Data = blk: {
-        if (builtin.os.tag == .windows) {
-            break :blk struct {
-                request: os.windows.OVERLAPPED = .{
+            request: os.windows.OVERLAPPED = .{
+                .Internal = 0,
+                .InternalHigh = 0,
+                .Offset = 0,
+                .OffsetHigh = 0,
+                .hEvent = null,
+            },
+            poll_info: pike.os.AFD_POLL_INFO = .{
+                .Timeout = math.maxInt(windows.LARGE_INTEGER),
+                .HandleCount = 1,
+                .Exclusive = 0,
+                .Handles = undefined,
+            },
+            pending: pike.Event = .{},
+
+            pub fn refresh(self: *@This(), event: pike.Event) !void {
+                const handle = @fieldParentPtr(Handle, "waker", @fieldParentPtr(Self, "data", self));
+
+                std.debug.print("Refreshing AFD for {*} with {} (current is {})\n", .{ handle.inner, event, self.pending });
+
+                if (self.pending.read == event.read and self.pending.write == event.write) {
+                    return;
+                }
+
+                if (self.pending.read or self.pending.write) { // Cancel previous AFD poll overlapped request if exists.
+                    pike.os.CancelIoEx(handle.driver.afd, &self.request) catch |err| switch (err) {
+                        error.RequestNotFound => {},
+                        else => return err,
+                    };
+                }
+
+                self.pending = event;
+
+                if (!self.pending.read and !self.pending.write) {
+                    return;
+                }
+
+                var events: windows.ULONG = 0;
+
+                if (self.pending.read) events |= READ_EVENTS;
+                if (self.pending.write) events |= WRITE_EVENTS;
+
+                self.poll_info.Handles[0].Handle = try pike.os.getBaseSocket(@ptrCast(ws2_32.SOCKET, handle.inner));
+                self.poll_info.Handles[0].Events = events;
+                self.poll_info.Handles[0].Status = .SUCCESS;
+
+                try pike.os.refreshAFD(handle.driver.afd, handle.inner, &self.poll_info, &self.request, events);
+            }
+
+            pub fn reset(self: *@This()) void {
+                self.request = .{
                     .Internal = 0,
                     .InternalHigh = 0,
                     .Offset = 0,
                     .OffsetHigh = 0,
                     .hEvent = null,
-                },
-                pending: pike.Event = .{},
+                };
+                self.poll_info = .{
+                    .Timeout = math.maxInt(windows.LARGE_INTEGER),
+                    .HandleCount = 1,
+                    .Exclusive = 0,
+                    .Handles = undefined,
+                };
 
-                pub fn refresh(self: *@This(), event: pike.Event) !void {
-                    if (self.pending.read == event.read and self.pending.write == event.write) {
-                        return;
-                    }
-
-                    const handle = @fieldParentPtr(pike.Handle, "waker", @fieldParentPtr(Self, "data", self));
-
-                    if (self.pending.read or self.pending.write) { // Cancel previous AFD poll overlapped request if exists.
-                        pike.os.CancelIoEx(handle.driver.afd, &self.request) catch |err| switch (err) {
-                            error.RequestNotFound => {},
-                            else => return err,
-                        };
-                    }
-
-                    self.pending = event;
-
-                    var events: windows.ULONG = 0;
-
-                    if (self.pending.read) {
-                        events |= READ_EVENTS;
-                    }
-                    if (self.pending.write) {
-                        events |= WRITE_EVENTS;
-                    }
-
-                    try pike.os.refreshAFD(handle.driver.afd, handle.inner, &self.request, events);
-                }
-
-                pub fn reset(self: *@This()) void {
-                    self.request = .{
-                        .Internal = 0,
-                        .InternalHigh = 0,
-                        .Offset = 0,
-                        .OffsetHigh = 0,
-                        .hEvent = null,
-                    };
-
-                    self.pending = .{};
-                }
-            };
-        } else {
-            break :blk void;
+                self.pending = .{};
+            }
         }
-    };
+    else
+        void;
 
     const Node = struct {
         next: ?*Node align(IS_READY + 1) = null,

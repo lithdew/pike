@@ -132,21 +132,8 @@ pub fn createAFD(comptime name: []const u8) !os.fd_t {
     return handle;
 }
 
-pub fn refreshAFD(afd: os.fd_t, handle: os.fd_t, overlapped: windows.LPOVERLAPPED, events: windows.ULONG) !void {
-    const base_handle = try getBaseSocket(@ptrCast(ws2_32.SOCKET, handle));
-
-    var poll_info = AFD_POLL_INFO{
-        .Timeout = math.maxInt(windows.LARGE_INTEGER),
-        .HandleCount = 1,
-        .Exclusive = 0,
-        .Handles = [1]AFD_HANDLE{.{
-            .Handle = base_handle,
-            .Status = .SUCCESS,
-            .Events = events,
-        }},
-    };
-
-    const poll_info_ptr = @ptrCast(*c_void, mem.asBytes(&poll_info));
+pub fn refreshAFD(afd: os.fd_t, handle: os.fd_t, poll_info: *AFD_POLL_INFO, overlapped: windows.LPOVERLAPPED, events: windows.ULONG) !void {
+    const poll_info_ptr = @ptrCast(*c_void, poll_info);
     const poll_info_len = @intCast(windows.DWORD, @sizeOf(AFD_POLL_INFO));
 
     const success = windows.kernel32.DeviceIoControl(

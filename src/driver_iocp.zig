@@ -51,6 +51,8 @@ pub fn poll(self: *Self, timeout: i32) !void {
     for (events[0..num_events]) |e, i| {
         const handle = pike.Handle.fromOverlapped(e.lpOverlapped);
 
+        std.debug.print("IOCP Notification (Handle: {*}, Pending: {})\n", .{ handle.inner, handle.waker.data.pending });
+
         if (handle.waker.data.pending.read and handle.waker.data.pending.write) {
             handle.trigger(.{ .read = true, .write = true });
         } else if (handle.waker.data.pending.read) {
