@@ -3,7 +3,7 @@ const pike = @import("pike.zig");
 
 pub const driver_type = switch (builtin.os.tag) {
     .linux => .epoll,
-    .macosx, .ios, .watchos, .tvos, .freebsd, .netbsd, .dragonfly => .kqueue,
+    .macos, .ios, .watchos, .tvos, .freebsd, .netbsd, .dragonfly => .kqueue,
     .windows => .iocp,
     else => @compileError("Unsupported OS"),
 };

@@ -44,7 +44,7 @@ pub fn read(fd: os.fd_t, bytes: []u8) os.ReadError!usize {
 pub fn write(fd: os.fd_t, bytes: []const u8) os.WriteError!usize {
     const max_count = switch (builtin.os.tag) {
         .linux => 0x7ffff000,
-        .macosx, .ios, .watchos, .tvos => math.maxInt(i32),
+        .macos, .ios, .watchos, .tvos => math.maxInt(i32),
         else => math.maxInt(isize),
     };
 
