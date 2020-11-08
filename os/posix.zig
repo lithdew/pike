@@ -14,5 +14,5 @@ pub fn getsockopt(comptime T: type, handle: socket_t, level: c_int, opt: c_int) 
         ENOPROTOOPT => error.UnsupportedOption, // The option is unknown at the level indicated.
         ENOTSOCK => error.NotASocket, // The file descriptor sockfd does not refer to a socket.
         else => |err| unexpectedErrno(err),
-    }
+    };
 }
