@@ -95,7 +95,7 @@ pub const Socket = struct {
         self.handle.deinit();
     }
 
-     pub fn get(self: *const Self, comptime opt: SocketOptionType) !UnionValueType(SocketOption, opt) {
+    pub fn get(self: *const Self, comptime opt: SocketOptionType) !UnionValueType(SocketOption, opt) {
         return posix.getsockopt(
             UnionValueType(SocketOption, opt),
             self.handle.inner,
@@ -105,11 +105,11 @@ pub const Socket = struct {
     }
 
     pub fn set(self: *const Self, comptime opt: SocketOptionType, value: UnionValueType(SocketOption, opt)) !void {
-        const val = switch(@TypeOf(value)) {
+        const val = switch (@TypeOf(value)) {
             bool => @intCast(c_int, @boolToInt(value)),
             else => value,
         };
-        
+
         try os.setsockopt(
             self.handle.inner,
             os.SOL_SOCKET,

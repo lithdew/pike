@@ -4,6 +4,7 @@ const posix = @import("os/posix.zig");
 const os = std.os;
 const net = std.net;
 const mem = std.mem;
+const time = std.time;
 
 usingnamespace @import("waker.zig");
 usingnamespace @import("socket.zig");
@@ -48,32 +49,48 @@ const Kqueue = struct {
     }
 
     pub fn register(self: *const Self, handle: *const Handle, comptime opts: RegisterOptions) !void {
-        const changelist = [_]os.Kevent{
+        var changelist = [_]os.Kevent{
             .{
-                .ident = @intCast(usize, handle.inner),
-                .filter = os.EVFILT_READ,
+                .ident = undefined,
+                .filter = undefined,
                 .flags = os.EV_ADD | os.EV_CLEAR,
                 .fflags = 0,
                 .data = 0,
-                .udata = @ptrToInt(handle),
+                .udata = undefined,
             },
-            .{
-                .ident = @intCast(usize, handle.inner),
-                .filter = os.EVFILT_WRITE,
-                .flags = os.EV_ADD | os.EV_CLEAR,
-                .fflags = 0,
-                .data = 0,
-                .udata = @ptrToInt(handle),
-            },
-        };
-    
-        const num_events = try os.kevent(self.handle, changelist[0..], &[0]os.Kevent{}, null);
+        } ** 2;
+
+        comptime var changelist_len = 0;
+
+        comptime {
+            if (opts.read) {
+                changelist[changelist_len].filter = os.EVFILT_READ;
+                changelist_len += 1;
+            }
+
+            if (opts.write) {
+                changelist[changelist_len].filter = os.EVFILT_WRITE;
+                changelist_len += 1;
+            }
+        }
+
+        for (changelist[0..changelist_len]) |*event| {
+            event.ident = @intCast(usize, handle.inner);
+            event.udata = @ptrToInt(handle);
+        }
+
+        const num_events = try os.kevent(self.handle, changelist[0..changelist_len], &[0]os.Kevent{}, null);
     }
 
     pub fn poll(self: *const Self, timeout: i32) !void {
         var events: [1024]os.Kevent = undefined;
 
-        const num_events = try os.kevent(self.handle, &[0]os.Kevent{}, events[0..], null);
+        const timeout_spec = os.timespec{
+            .tv_sec = @divTrunc(timeout, time.ms_per_s),
+            .tv_nsec = @rem(timeout, time.ms_per_s) * time.ns_per_ms,
+        };
+
+        const num_events = try os.kevent(self.handle, &[0]os.Kevent{}, events[0..], &timeout_spec);
 
         for (events[0..num_events]) |e| {
             const err = e.flags & os.EV_ERROR != 0;
@@ -135,11 +152,11 @@ pub const Socket = struct {
     }
 
     pub fn set(self: *const Self, comptime opt: SocketOptionType, value: UnionValueType(SocketOption, opt)) !void {
-        const val = switch(@TypeOf(value)) {
+        const val = switch (@TypeOf(value)) {
             bool => @intCast(c_int, @boolToInt(value)),
             else => value,
         };
-        
+
         try os.setsockopt(
             self.handle.inner,
             os.SOL_SOCKET,
