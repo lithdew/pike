@@ -1,4 +1,5 @@
 const std = @import("std");
+const pike = @import("pike.zig");
 const posix = @import("os/posix.zig");
 
 const os = std.os;
@@ -8,11 +9,6 @@ const time = std.time;
 
 usingnamespace @import("waker.zig");
 usingnamespace @import("socket.zig");
-
-pub const RegisterOptions = packed struct {
-    read: bool = false,
-    write: bool = false,
-};
 
 const Handle = struct {
     const Self = @This();
@@ -48,7 +44,7 @@ const Kqueue = struct {
         os.close(self.handle);
     }
 
-    pub fn register(self: *const Self, handle: *const Handle, comptime opts: RegisterOptions) !void {
+    pub fn register(self: *const Self, handle: *const Handle, comptime opts: pike.PollOptions) !void {
         var changelist = [_]os.Kevent{
             .{
                 .ident = undefined,
@@ -108,6 +104,24 @@ const Kqueue = struct {
             if (write_ready) if (handle.writers.wake(&handle.lock)) |frame| resume frame;
         }
     }
+
+    pub fn call(handle: *Handle, comptime function: anytype, args: anytype, comptime opts: pike.CallOptions) callconv(.Async) @typeInfo(@TypeOf(function)).Fn.return_type.? {
+        defer if (comptime opts.read) if (handle.readers.next(&handle.lock)) |frame| resume frame;
+        defer if (comptime opts.write) if (handle.writers.next(&handle.lock)) |frame| resume frame;
+
+        while (true) {
+            const result = @call(.{ .modifier = .always_inline }, function, args) catch |err| switch (err) {
+                error.WouldBlock => {
+                    if (comptime opts.read) handle.readers.wait(&handle.lock);
+                    if (comptime opts.write) handle.writers.wait(&handle.lock);
+                    continue;
+                },
+                else => return err,
+            };
+
+            return result;
+        }
+    }
 };
 
 pub const Socket = struct {
@@ -129,17 +143,6 @@ pub const Socket = struct {
 
     pub fn deinit(self: *const Self) void {
         self.handle.deinit();
-    }
-
-    pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {
-        defer if (self.handle.writers.next(&self.handle.lock)) |frame| resume frame;
-
-        os.connect(self.handle.inner, &address.any, address.getOsSockLen()) catch |err| switch (err) {
-            error.WouldBlock => self.handle.writers.wait(&self.handle.lock),
-            else => return err,
-        };
-
-        try os.getsockoptError(self.handle.inner);
     }
 
     pub fn get(self: *const Self, comptime opt: SocketOptionType) !UnionValueType(SocketOption, opt) {
@@ -180,38 +183,20 @@ pub const Socket = struct {
     }
 
     pub fn accept(self: *Self) callconv(.Async) !Socket {
-        defer if (self.handle.readers.next(&self.handle.lock)) |frame| resume frame;
-
         var addr: os.sockaddr = undefined;
         var addr_len: os.socklen_t = @sizeOf(@TypeOf(addr));
 
-        while (true) {
-            const handle = os.accept(self.handle.inner, &addr, &addr_len, os.SOCK_NONBLOCK | os.SOCK_CLOEXEC) catch |err| switch (err) {
-                error.WouldBlock => {
-                    self.handle.readers.wait(&self.handle.lock);
-                    continue;
-                },
-                else => return err,
-            };
+        const handle = try Kqueue.call(&self.handle, os.accept, .{ self.handle.inner, &addr, &addr_len, os.SOCK_NONBLOCK | os.SOCK_CLOEXEC }, .{ .read = true });
 
-            return Socket{ .handle = .{ .inner = handle } };
-        }
+        return Socket{ .handle = .{ .inner = handle } };
+    }
+
+    pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {
+        return Kqueue.call(&self.handle, os.connect, .{ self.handle.inner, &address.any, address.getOsSockLen() }, .{ .write = true });
     }
 
     pub fn read(self: *Self, buf: []u8) callconv(.Async) !usize {
-        defer if (self.handle.readers.next(&self.handle.lock)) |frame| resume frame;
-
-        while (true) {
-            const num_bytes = os.read(self.handle.inner, buf) catch |err| switch (err) {
-                error.WouldBlock => {
-                    self.handle.readers.wait(&self.handle.lock);
-                    continue;
-                },
-                else => return err,
-            };
-
-            return num_bytes;
-        }
+        return Kqueue.call(&self.handle, os.read, .{ self.handle.inner, buf }, .{ .read = true });
     }
 
     pub fn recv(self: *Self, buf: []u8, flags: u32) callconv(.Async) !usize {
@@ -219,48 +204,26 @@ pub const Socket = struct {
     }
 
     pub fn recvFrom(self: *Self, buf: []u8, flags: u32, address: ?*net.Address) callconv(.Async) !usize {
-        defer if (self.handle.readers.next(&self.handle.lock)) |frame| resume frame;
+        var src_addr: os.sockaddr = undefined;
+        var src_addr_len: os.socklen_t = undefined;
 
-        while (true) {
-            var src_addr: os.sockaddr = undefined;
-            var src_addr_len: os.socklen_t = undefined;
+        const num_bytes = Kqueue.call(&self.handle, os.recvfrom, .{
+            self.handle.inner,
+            buf,
+            flags,
+            @as(?*os.sockaddr, if (address != null) &src_addr else null),
+            @as(?*os.socklen_t, if (address != null) &src_addr_len else null),
+        }, .{ .read = true });
 
-            const num_bytes = os.recvfrom(
-                self.handle.inner,
-                buf,
-                flags,
-                if (address != null) &src_addr else null,
-                if (address != null) &src_addr_len else null,
-            ) catch |err| switch (err) {
-                error.WouldBlock => {
-                    self.handle.readers.wait(&self.handle.lock);
-                    continue;
-                },
-                else => return err,
-            };
-
-            if (address) |a| {
-                a.* = net.Address{ .any = src_addr };
-            }
-
-            return num_bytes;
+        if (address) |a| {
+            a.* = net.Address{ .any = src_addr };
         }
+
+        return num_bytes;
     }
 
     pub fn write(self: *Self, buf: []const u8) callconv(.Async) !usize {
-        defer if (self.handle.writers.next(&self.handle.lock)) |frame| resume frame;
-
-        while (true) {
-            const num_bytes = os.write(self.handle.inner, buf) catch |err| switch (err) {
-                error.WouldBlock => {
-                    self.handle.writers.wait(&self.handle.lock);
-                    continue;
-                },
-                else => return err,
-            };
-
-            return num_bytes;
-        }
+        return Kqueue.call(&self.handle, os.write, .{ self.handle.inner, buf }, .{ .write = true });
     }
 
     pub fn send(self: *Self, buf: []const u8, flags: u32) callconv(.Async) !usize {
@@ -268,25 +231,13 @@ pub const Socket = struct {
     }
 
     pub fn sendTo(self: *Self, buf: []const u8, flags: u32, address: ?net.Address) callconv(.Async) !usize {
-        defer if (self.handle.writers.next(&self.handle.lock)) |frame| resume frame;
-
-        while (true) {
-            const num_bytes = os.sendto(
-                self.handle.inner,
-                buf,
-                flags,
-                if (address) |a| &a.any else null,
-                if (address) |a| a.getOsSockLen() else 0,
-            ) catch |err| switch (err) {
-                error.WouldBlock => {
-                    self.handle.writers.wait(&self.handle.lock);
-                    continue;
-                },
-                else => return err,
-            };
-
-            return num_bytes;
-        }
+        return Kqueue.call(&self.handle, os.sendto, .{
+            self.handle.inner,
+            buf,
+            flags,
+            @as(?*const os.sockaddr, if (address) |a| &a.any else null),
+            if (address) |a| a.getOsSockLen() else 0,
+        }, .{ .write = true });
     }
 };
 

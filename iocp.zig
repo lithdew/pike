@@ -1,4 +1,5 @@
 const std = @import("std");
+const pike = @import("pike.zig");
 const windows = @import("os/windows.zig");
 const ws2_32 = @import("os/windows/ws2_32.zig");
 
@@ -8,10 +9,8 @@ const math = std.math;
 
 usingnamespace @import("socket.zig");
 
-pub const RegisterOptions = packed struct {
-    read: bool = false,
-    write: bool = false,
-};
+var OVERLAPPED = windows.OVERLAPPED{ .Internal = 0, .InternalHigh = 0, .Offset = 0, .OffsetHigh = 0, .hEvent = null };
+var OVERLAPPED_PARAM = &OVERLAPPED;
 
 pub const Handle = struct {
     const Self = @This();
@@ -27,7 +26,7 @@ pub const Handle = struct {
     }
 };
 
-pub const Overlapped = struct {
+const Overlapped = struct {
     const Self = @This();
 
     inner: windows.OVERLAPPED,
@@ -68,7 +67,7 @@ pub const IOCP = struct {
         windows.CloseHandle(self.handle);
     }
 
-    pub fn register(self: *const Self, handle: *const Handle, comptime opts: RegisterOptions) !void {
+    pub fn register(self: *const Self, handle: *const Handle, comptime opts: pike.PollOptions) !void {
         const port = try windows.CreateIoCompletionPort(handle.inner, self.handle, 0, 0);
 
         try windows.SetFileCompletionNotificationModes(
@@ -85,6 +84,27 @@ pub const IOCP = struct {
         for (events[0..num_events]) |event| {
             resume @fieldParentPtr(Overlapped, "inner", event.lpOverlapped).frame;
         }
+    }
+
+    pub fn call(handle: *Handle, comptime function: anytype, raw_args: anytype, comptime opts: pike.CallOptions) callconv(.Async) !Overlapped {
+        var overlapped = Overlapped.init(@frame());
+        var args = raw_args;
+
+        comptime var i = 0;
+        inline while (i < args.len) : (i += 1) {
+            if (comptime @TypeOf(args[i]) == *windows.OVERLAPPED) {
+                args[i] = &overlapped.inner;
+            }
+        }
+
+        @call(.{ .modifier = .always_inline }, function, args) catch |err| switch (err) {
+            error.WouldBlock => {
+                suspend;
+            },
+            else => return err,
+        };
+
+        return overlapped;
     }
 };
 
@@ -155,18 +175,11 @@ pub const Socket = struct {
         );
         errdefer incoming.deinit();
 
-        var overlapped = Overlapped.init(@frame());
-
-        windows.AcceptEx(
+        const overlapped = try IOCP.call(&self.handle, windows.AcceptEx, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             @ptrCast(ws2_32.SOCKET, incoming.handle.inner),
-            &overlapped.inner,
-        ) catch |err| switch (err) {
-            error.WouldBlock => {
-                suspend;
-            },
-            else => return err,
-        };
+            OVERLAPPED_PARAM,
+        }, .{});
 
         try incoming.set(.update_accept_context, @ptrCast(ws2_32.SOCKET, self.handle.inner));
 
@@ -176,19 +189,12 @@ pub const Socket = struct {
     pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {
         try self.bind(net.Address.initIp4(.{ 0, 0, 0, 0 }, 0));
 
-        var overlapped = Overlapped.init(@frame());
-
-        windows.ConnectEx(
+        const overlapped = try IOCP.call(&self.handle, windows.ConnectEx, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             &address.any,
             address.getOsSockLen(),
-            &overlapped.inner,
-        ) catch |err| switch (err) {
-            error.WouldBlock => {
-                suspend;
-            },
-            else => return err,
-        };
+            OVERLAPPED_PARAM,
+        }, .{});
 
         try windows.getsockoptError(@ptrCast(ws2_32.SOCKET, self.handle.inner));
 
@@ -196,50 +202,33 @@ pub const Socket = struct {
     }
 
     pub fn read(self: *Self, buf: []u8) callconv(.Async) !usize {
-        var overlapped = Overlapped.init(@frame());
-
-        windows.ReadFile_(self.handle.inner, buf, &overlapped.inner) catch |err| switch (err) {
-            error.WouldBlock => {
-                suspend;
-            },
-            else => return err,
-        };
+        const overlapped = try IOCP.call(&self.handle, windows.ReadFile_, .{
+            self.handle.inner, buf, OVERLAPPED_PARAM,
+        }, .{});
 
         return overlapped.inner.InternalHigh;
     }
 
     pub fn recv(self: *Self, buf: []u8, flags: u32) callconv(.Async) !usize {
-        var overlapped = Overlapped.init(@frame());
-
-        windows.WSARecv(@ptrCast(ws2_32.SOCKET, self.handle.inner), buf, flags, &overlapped.inner) catch |err| switch (err) {
-            error.WouldBlock => {
-                suspend;
-            },
-            else => return err,
-        };
+        const overlapped = try IOCP.call(&self.handle, windows.WSARecv, .{
+            @ptrCast(ws2_32.SOCKET, self.handle.inner), buf, flags, OVERLAPPED_PARAM
+        }, .{});
 
         return overlapped.inner.InternalHigh;
     }
 
     pub fn recvFrom(self: *Self, buf: []u8, flags: u32, address: ?*net.Address) callconv(.Async) !usize {
-        var overlapped = Overlapped.init(@frame());
-
         var src_addr: ws2_32.sockaddr = undefined;
         var src_addr_len: ws2_32.socklen_t = undefined;
 
-        windows.WSARecvFrom(
+        const overlapped = try IOCP.call(&self.handle, windows.WSARecvFrom, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             buf,
             flags,
-            if (address != null) &src_addr else null,
-            if (address != null) &src_addr_len else null,
-            &overlapped.inner,
-        ) catch |err| switch (err) {
-            error.WouldBlock => {
-                suspend;
-            },
-            else => return err,
-        };
+            @as(?*ws2_32.sockaddr, if (address != null) &src_addr else null),
+            @as(?*ws2_32.socklen_t, if (address != null) &src_addr_len else null),
+            OVERLAPPED_PARAM,
+        }, .{});
 
         if (address) |a| {
             a.* = net.Address{ .any = src_addr };
@@ -249,47 +238,30 @@ pub const Socket = struct {
     }
 
     pub fn write(self: *Self, buf: []const u8) callconv(.Async) !usize {
-        var overlapped = Overlapped.init(@frame());
-
-        windows.WriteFile_(@ptrCast(ws2_32.SOCKET, self.handle.inner), buf, &overlapped.inner) catch |err| switch (err) {
-            error.WouldBlock => {
-                suspend;
-            },
-            else => return err,
-        };
+        const overlapped = try IOCP.call(&self.handle, windows.WriteFile_, .{
+            self.handle.inner, buf, OVERLAPPED_PARAM,
+        }, .{});
 
         return overlapped.inner.InternalHigh;
     }
 
     pub fn send(self: *Self, buf: []const u8, flags: u32) callconv(.Async) !usize {
-        var overlapped = Overlapped.init(@frame());
-
-        windows.WSASend(@ptrCast(ws2_32.SOCKET, self.handle.inner), buf, flags, &overlapped.inner) catch |err| switch (err) {
-            error.WouldBlock => {
-                suspend;
-            },
-            else => return err,
-        };
+        const overlapped = try IOCP.call(&self.handle, windows.WSASend, .{
+            @ptrCast(ws2_32.SOCKET, self.handle.inner), buf, flags, OVERLAPPED_PARAM
+        }, .{});
 
         return overlapped.inner.InternalHigh;
     }
 
     pub fn sendTo(self: *Self, buf: []const u8, flags: u32, address: ?net.Address) callconv(.Async) !usize {
-        var overlapped = Overlapped.init(@frame());
-
-        windows.WSASendTo(
-            @ptrCast(ws2_32.SOCKET, self.handle.inner),
+        const overlapped = try IOCP.call(&self.handle, windows.WSASendTo, .{
+             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             buf,
             flags,
-            if (address) |a| &a.any else null,
+            @as(?*const ws2_32.sockaddr, if (address) |a| &a.any else null),
             if (address) |a| a.getOsSockLen() else 0,
-            &overlapped.inner,
-        ) catch |err| switch (err) {
-            error.WouldBlock => {
-                suspend;
-            },
-            else => return err,
-        };
+            OVERLAPPED_PARAM,
+        }, .{});
 
         return overlapped.inner.InternalHigh;
     }
