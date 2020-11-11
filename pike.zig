@@ -38,3 +38,10 @@ pub usingnamespace if (builtin.os.tag == .windows)
     @import("socket_windows.zig")
 else
     @import("socket_posix.zig");
+
+// Export 'SignalType', and 'Signal'.
+
+pub usingnamespace if (builtin.os.tag == .linux)
+    @import("signal_linux.zig")
+else
+    @compileError("pike: unable to figure out a 'Signal' implementation to use for the build target");

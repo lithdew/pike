@@ -21,3 +21,13 @@ pub fn getsockopt(comptime T: type, handle: socket_t, level: c_int, opt: c_int) 
         else => |err| unexpectedErrno(err),
     };
 }
+
+pub fn sigprocmask(flags: u32, noalias set: ?*const sigset_t, noalias oldset: ?*sigset_t) !void {
+    const rc = system.sigprocmask(flags, set, oldset);
+    return switch (errno(rc)) {
+        0 => {},
+        EFAULT => error.InvalidParameter,
+        EINVAL => error.BadSignalSet,
+        else => |err| unexpectedErrno(err),
+    };
+}
