@@ -3,8 +3,8 @@ const std = @import("std");
 usingnamespace std.os;
 
 pub const LINGER = extern struct {
-    l_onoff: windows.USHORT, // Whether or not a socket should remain open to send queued dataa after closesocket() is called.
-    l_linger: windows.USHORT, // Number of seconds on how long a socket should remain open after closesocket() is called.
+    l_onoff: c_int, // Whether or not a socket should remain open to send queued dataa after closesocket() is called.
+    l_linger: c_int, // Number of seconds on how long a socket should remain open after closesocket() is called.
 };
 
 pub fn getsockopt(comptime T: type, handle: socket_t, level: c_int, opt: c_int) !T {
