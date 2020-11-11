@@ -45,8 +45,8 @@ pub const Signal = struct {
     }
 
     pub fn deinit(self: *const Self) void {
-        posix.sigprocmask(os.SIG_SETMASK, &self.prev, null) catch {};
         os.close(self.handle.inner);
+        posix.sigprocmask(os.SIG_SETMASK, &self.prev, null) catch {};
     }
 
     fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
