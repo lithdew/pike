@@ -37,7 +37,7 @@ pub const Signal = struct {
 
         return Self{
             .handle = .{
-                .inner = try os.signalfd(-1, &set, os.O_CLOEXEC),
+                .inner = try os.signalfd(-1, &set, os.O_NONBLOCK | os.O_CLOEXEC),
                 .wake_fn = wake,
             },
             .prev = prev,
