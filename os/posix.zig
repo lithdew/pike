@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const builtin = std.builtin;
+
 usingnamespace std.os;
 
 pub const LINGER = extern struct {
@@ -22,7 +24,7 @@ pub fn getsockopt(comptime T: type, handle: socket_t, level: c_int, opt: c_int) 
     };
 }
 
-pub fn sigprocmask(flags: u32, noalias set: ?*const sigset_t, noalias oldset: ?*sigset_t) !void {
+pub fn sigprocmask(flags: anytype, noalias set: ?*const sigset_t, noalias oldset: ?*sigset_t) !void {
     const rc = system.sigprocmask(flags, set, oldset);
     return switch (errno(rc)) {
         0 => {},

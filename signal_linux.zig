@@ -33,7 +33,9 @@ pub const Signal = struct {
         if (signal.hup) system.sigaddset(&set, os.SIGHUP);
 
         var prev = mem.zeroes(os.sigset_t);
+
         try posix.sigprocmask(os.SIG_BLOCK, &set, &prev);
+        errdefer posix.sigprocmask(os.SIG_SETMASK, &prev, null) catch {};
 
         return Self{
             .handle = .{
