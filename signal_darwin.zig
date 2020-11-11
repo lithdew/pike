@@ -88,7 +88,9 @@ pub const Signal = struct {
     }
 
     fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
-        @panic("pike/signal (darwin): kqueue unexpectedly reported readiness");
+        const self = @fieldParentPtr(Self, "handle", handle);
+        if (opts.read_ready) if (self.readers.wake(&self.lock)) |frame| resume frame;
+        if (opts.write_ready) @panic("pike/signal (darwin): kqueue unexpectedly reported read-readiness");
     }
 
     pub fn wait(self: *Self) callconv(.Async) !void {
