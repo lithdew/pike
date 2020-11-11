@@ -161,7 +161,14 @@ pub const Socket = struct {
     }
 
     pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {
-        return self.call(os.connect, .{ self.handle.inner, &address.any, address.getOsSockLen() }, .{ .write = true });
+        return self.call(
+            posix.connect_,
+            .{ self.handle.inner, &address.any, address.getOsSockLen() },
+            .{ .write = true },
+        ) catch |err| switch (err) {
+            error.AlreadyConnected => {},
+            else => err,
+        };
     }
 
     pub fn read(self: *Self, buf: []u8) callconv(.Async) !usize {
