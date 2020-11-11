@@ -140,7 +140,7 @@ pub const Socket = struct {
         var src_addr: os.sockaddr = undefined;
         var src_addr_len: os.socklen_t = undefined;
 
-        const num_bytes = pike.Notifier.call(&self.handle, os.recvfrom, .{
+        const num_bytes = try pike.Notifier.call(&self.handle, os.recvfrom, .{
             self.handle.inner,
             buf,
             flags,
