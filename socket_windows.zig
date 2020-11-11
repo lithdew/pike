@@ -80,8 +80,8 @@ pub const Socket = struct {
 
     pub fn init(domain: i32, socket_type: i32, protocol: i32, flags: windows.DWORD) !Self {
         return Self{
-            .handle = pike.Handle.init(
-                try windows.WSASocketW(
+            .handle = .{
+                .inner = try windows.WSASocketW(
                     domain,
                     socket_type,
                     protocol,
@@ -89,12 +89,33 @@ pub const Socket = struct {
                     0,
                     flags | ws2_32.WSA_FLAG_OVERLAPPED | ws2_32.WSA_FLAG_NO_HANDLE_INHERIT,
                 ),
-            ),
+            },
         };
     }
 
     pub fn deinit(self: *const Self) void {
-        self.handle.deinit();
+        windows.closesocket(@ptrCast(ws2_32.SOCKET, self.handle.inner)) catch {};
+    }
+
+    fn call(self: *Self, comptime function: anytype, raw_args: anytype, comptime opts: pike.CallOptions) callconv(.Async) !pike.Overlapped {
+        var overlapped = pike.Overlapped.init(@frame());
+        var args = raw_args;
+
+        comptime var i = 0;
+        inline while (i < args.len) : (i += 1) {
+            if (comptime @TypeOf(args[i]) == *windows.OVERLAPPED) {
+                args[i] = &overlapped.inner;
+            }
+        }
+
+        @call(.{ .modifier = .always_inline }, function, args) catch |err| switch (err) {
+            error.WouldBlock => {
+                suspend;
+            },
+            else => return err,
+        };
+
+        return overlapped;
     }
 
     pub fn get(self: *const Self, comptime opt: SocketOptionType) !UnionValueType(SocketOption, opt) {
@@ -140,7 +161,7 @@ pub const Socket = struct {
         );
         errdefer incoming.deinit();
 
-        const overlapped = try pike.Notifier.call(&self.handle, windows.AcceptEx, .{
+        const overlapped = try self.call(windows.AcceptEx, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             @ptrCast(ws2_32.SOCKET, incoming.handle.inner),
             OVERLAPPED_PARAM,
@@ -154,7 +175,7 @@ pub const Socket = struct {
     pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {
         try self.bind(net.Address.initIp4(.{ 0, 0, 0, 0 }, 0));
 
-        const overlapped = try pike.Notifier.call(&self.handle, windows.ConnectEx, .{
+        const overlapped = try self.call(windows.ConnectEx, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             &address.any,
             address.getOsSockLen(),
@@ -167,7 +188,7 @@ pub const Socket = struct {
     }
 
     pub fn read(self: *Self, buf: []u8) callconv(.Async) !usize {
-        const overlapped = try pike.Notifier.call(&self.handle, windows.ReadFile_, .{
+        const overlapped = try self.call(windows.ReadFile_, .{
             self.handle.inner, buf, OVERLAPPED_PARAM,
         }, .{});
 
@@ -175,7 +196,7 @@ pub const Socket = struct {
     }
 
     pub fn recv(self: *Self, buf: []u8, flags: u32) callconv(.Async) !usize {
-        const overlapped = try pike.Notifier.call(&self.handle, windows.WSARecv, .{
+        const overlapped = try self.call(windows.WSARecv, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner), buf, flags, OVERLAPPED_PARAM,
         }, .{});
 
@@ -186,7 +207,7 @@ pub const Socket = struct {
         var src_addr: ws2_32.sockaddr = undefined;
         var src_addr_len: ws2_32.socklen_t = undefined;
 
-        const overlapped = try pike.Notifier.call(&self.handle, windows.WSARecvFrom, .{
+        const overlapped = try self.call(windows.WSARecvFrom, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             buf,
             flags,
@@ -203,7 +224,7 @@ pub const Socket = struct {
     }
 
     pub fn write(self: *Self, buf: []const u8) callconv(.Async) !usize {
-        const overlapped = try pike.Notifier.call(&self.handle, windows.WriteFile_, .{
+        const overlapped = try self.call(windows.WriteFile_, .{
             self.handle.inner, buf, OVERLAPPED_PARAM,
         }, .{});
 
@@ -211,7 +232,7 @@ pub const Socket = struct {
     }
 
     pub fn send(self: *Self, buf: []const u8, flags: u32) callconv(.Async) !usize {
-        const overlapped = try pike.Notifier.call(&self.handle, windows.WSASend, .{
+        const overlapped = try self.call(windows.WSASend, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner), buf, flags, OVERLAPPED_PARAM,
         }, .{});
 
@@ -219,7 +240,7 @@ pub const Socket = struct {
     }
 
     pub fn sendTo(self: *Self, buf: []const u8, flags: u32, address: ?net.Address) callconv(.Async) !usize {
-        const overlapped = try pike.Notifier.call(&self.handle, windows.WSASendTo, .{
+        const overlapped = try self.call(windows.WSASendTo, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             buf,
             flags,

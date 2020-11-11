@@ -10,44 +10,35 @@ const math = std.math;
 pub inline fn init() !void {
     const info = try windows.WSAStartup(2, 2);
 }
+
 pub inline fn deinit() void {
     windows.WSACleanup() catch unreachable;
 }
 
 pub const Handle = struct {
-    const Self = @This();
-
     inner: os.fd_t,
+};
 
-    pub fn init(handle: os.fd_t) Self {
-        return Self{ .inner = handle };
-    }
+pub const Overlapped = struct {
+    inner: windows.OVERLAPPED,
+    frame: anyframe,
 
-    pub fn deinit(self: *const Self) void {
-        windows.closesocket(@ptrCast(ws2_32.SOCKET, self.inner)) catch {};
+    pub fn init(frame: anyframe) Overlapped {
+        return .{
+            .inner = .{
+                .Internal = 0,
+                .InternalHigh = 0,
+                .Offset = 0,
+                .OffsetHigh = 0,
+                .hEvent = null,
+            },
+            .frame = frame,
+        };
     }
 };
 
 pub const Notifier = struct {
     const Self = @This();
-
-    const Overlapped = struct {
-        inner: windows.OVERLAPPED,
-        frame: anyframe,
-
-        pub fn init(frame: anyframe) Overlapped {
-            return .{
-                .inner = .{
-                    .Internal = 0,
-                    .InternalHigh = 0,
-                    .Offset = 0,
-                    .OffsetHigh = 0,
-                    .hEvent = null,
-                },
-                .frame = frame,
-            };
-        }
-    };
 
     handle: os.fd_t,
 
@@ -84,26 +75,5 @@ pub const Notifier = struct {
         for (events[0..num_events]) |event| {
             resume @fieldParentPtr(Overlapped, "inner", event.lpOverlapped).frame;
         }
-    }
-
-    pub fn call(handle: *Handle, comptime function: anytype, raw_args: anytype, comptime opts: pike.CallOptions) callconv(.Async) !Overlapped {
-        var overlapped = Overlapped.init(@frame());
-        var args = raw_args;
-
-        comptime var i = 0;
-        inline while (i < args.len) : (i += 1) {
-            if (comptime @TypeOf(args[i]) == *windows.OVERLAPPED) {
-                args[i] = &overlapped.inner;
-            }
-        }
-
-        @call(.{ .modifier = .always_inline }, function, args) catch |err| switch (err) {
-            error.WouldBlock => {
-                suspend;
-            },
-            else => return err,
-        };
-
-        return overlapped;
     }
 };

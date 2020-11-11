@@ -14,6 +14,11 @@ pub const CallOptions = packed struct {
     write: bool = false,
 };
 
+pub const WakeOptions = packed struct {
+    read_ready: bool = false,
+    write_ready: bool = false,
+};
+
 // Export 'Notifier' and 'Handle'.
 
 pub usingnamespace if (@hasDecl(root, "notifier"))

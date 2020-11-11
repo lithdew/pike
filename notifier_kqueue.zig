@@ -13,20 +13,11 @@ pub inline fn init() !void {}
 pub inline fn deinit() void {}
 
 pub const Handle = struct {
-    const Self = @This();
-
     inner: os.fd_t,
+    wake_fn: fn (self: *Handle, opts: pike.WakeOptions) void,
 
-    lock: std.Mutex = .{},
-    readers: Waker = .{},
-    writers: Waker = .{},
-
-    pub fn init(inner: os.fd_t) Self {
-        return Self{ .inner = inner };
-    }
-
-    pub fn deinit(self: *const Self) void {
-        os.close(self.inner);
+    pub inline fn wake(self: *Handle, opts: pike.WakeOptions) void {
+        self.wake_fn(self, opts);
     }
 };
 
@@ -91,6 +82,8 @@ pub const Notifier = struct {
         const num_events = try os.kevent(self.handle, &[0]os.Kevent{}, events[0..], &timeout_spec);
 
         for (events[0..num_events]) |e| {
+            const handle = @intToPtr(*Handle, e.udata);
+
             const err = e.flags & os.EV_ERROR != 0;
             const eof = e.flags & os.EV_EOF != 0;
 
@@ -100,28 +93,7 @@ pub const Notifier = struct {
             const read_ready = (err or eof) or readable;
             const write_ready = (err or eof) or writable;
 
-            const handle = @intToPtr(*Handle, e.udata);
-
-            if (read_ready) if (handle.readers.wake(&handle.lock)) |frame| resume frame;
-            if (write_ready) if (handle.writers.wake(&handle.lock)) |frame| resume frame;
-        }
-    }
-
-    pub fn call(handle: *Handle, comptime function: anytype, args: anytype, comptime opts: pike.CallOptions) callconv(.Async) @typeInfo(@TypeOf(function)).Fn.return_type.? {
-        defer if (comptime opts.read) if (handle.readers.next(&handle.lock)) |frame| resume frame;
-        defer if (comptime opts.write) if (handle.writers.next(&handle.lock)) |frame| resume frame;
-
-        while (true) {
-            const result = @call(.{ .modifier = .always_inline }, function, args) catch |err| switch (err) {
-                error.WouldBlock => {
-                    if (comptime opts.read) handle.readers.wait(&handle.lock);
-                    if (comptime opts.write) handle.writers.wait(&handle.lock);
-                    continue;
-                },
-                else => return err,
-            };
-
-            return result;
+            handle.wake(.{ .read_ready = read_ready, .write_ready = write_ready });
         }
     }
 };

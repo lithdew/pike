@@ -294,7 +294,7 @@ pub fn getsockopt(comptime T: type, handle: ws2_32.SOCKET, level: c_int, opt: c_
 }
 
 pub fn getsockoptError(handle: ws2_32.SOCKET) !void {
-    const errno = try getsockopt(usize, handle, ws2_32.SOL_SOCKET, ws2_32.SO_ERROR);
+    const errno = try getsockopt(u32, handle, ws2_32.SOL_SOCKET, ws2_32.SO_ERROR);
 
     if (errno != 0) {
         return switch (@intToEnum(ws2_32.WinsockError, @truncate(u16, errno))) {

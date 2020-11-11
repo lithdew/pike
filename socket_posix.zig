@@ -7,6 +7,8 @@ const net = std.net;
 const mem = std.mem;
 const meta = std.meta;
 
+usingnamespace @import("waker.zig");
+
 fn UnionValueType(comptime Union: type, comptime Tag: anytype) type {
     return meta.fieldInfo(Union, @tagName(Tag)).field_type;
 }
@@ -62,20 +64,49 @@ pub const Socket = struct {
 
     handle: pike.Handle,
 
+    lock: std.Mutex = .{},
+    readers: Waker = .{},
+    writers: Waker = .{},
+
     pub fn init(domain: u32, socket_type: u32, protocol: u32, flags: u32) !Self {
         return Self{
-            .handle = pike.Handle.init(
-                try os.socket(
+            .handle = .{
+                .inner = try os.socket(
                     domain,
                     socket_type | flags | os.SOCK_CLOEXEC | os.SOCK_NONBLOCK,
                     protocol,
                 ),
-            ),
+                .wake_fn = wake,
+            },
         };
     }
 
     pub fn deinit(self: *const Self) void {
-        self.handle.deinit();
+        os.close(self.handle.inner);
+    }
+
+    fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
+        const self = @fieldParentPtr(Self, "handle", handle);
+        if (opts.read_ready) if (self.readers.wake(&self.lock)) |frame| resume frame;
+        if (opts.write_ready) if (self.writers.wake(&self.lock)) |frame| resume frame;
+    }
+
+    fn call(self: *Self, comptime function: anytype, args: anytype, comptime opts: pike.CallOptions) callconv(.Async) @typeInfo(@TypeOf(function)).Fn.return_type.? {
+        defer if (comptime opts.read) if (self.readers.next(&self.lock)) |frame| resume frame;
+        defer if (comptime opts.write) if (self.writers.next(&self.lock)) |frame| resume frame;
+
+        while (true) {
+            const result = @call(.{ .modifier = .always_inline }, function, args) catch |err| switch (err) {
+                error.WouldBlock => {
+                    if (comptime opts.read) self.readers.wait(&self.lock);
+                    if (comptime opts.write) self.writers.wait(&self.lock);
+                    continue;
+                },
+                else => return err,
+            };
+
+            return result;
+        }
     }
 
     pub fn get(self: *const Self, comptime opt: SocketOptionType) !UnionValueType(SocketOption, opt) {
@@ -119,17 +150,22 @@ pub const Socket = struct {
         var addr: os.sockaddr = undefined;
         var addr_len: os.socklen_t = @sizeOf(@TypeOf(addr));
 
-        const handle = try pike.Notifier.call(&self.handle, os.accept, .{ self.handle.inner, &addr, &addr_len, os.SOCK_NONBLOCK | os.SOCK_CLOEXEC }, .{ .read = true });
+        const handle = try self.call(os.accept, .{
+            self.handle.inner,
+            &addr,
+            &addr_len,
+            os.SOCK_NONBLOCK | os.SOCK_CLOEXEC,
+        }, .{ .read = true });
 
-        return Socket{ .handle = .{ .inner = handle } };
+        return Socket{ .handle = .{ .inner = handle, .wake_fn = wake } };
     }
 
     pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {
-        return pike.Notifier.call(&self.handle, os.connect, .{ self.handle.inner, &address.any, address.getOsSockLen() }, .{ .write = true });
+        return self.call(os.connect, .{ self.handle.inner, &address.any, address.getOsSockLen() }, .{ .write = true });
     }
 
     pub fn read(self: *Self, buf: []u8) callconv(.Async) !usize {
-        return pike.Notifier.call(&self.handle, os.read, .{ self.handle.inner, buf }, .{ .read = true });
+        return self.call(os.read, .{ self.handle.inner, buf }, .{ .read = true });
     }
 
     pub fn recv(self: *Self, buf: []u8, flags: u32) callconv(.Async) !usize {
@@ -140,7 +176,7 @@ pub const Socket = struct {
         var src_addr: os.sockaddr = undefined;
         var src_addr_len: os.socklen_t = undefined;
 
-        const num_bytes = try pike.Notifier.call(&self.handle, os.recvfrom, .{
+        const num_bytes = try self.call(os.recvfrom, .{
             self.handle.inner,
             buf,
             flags,
@@ -156,7 +192,7 @@ pub const Socket = struct {
     }
 
     pub fn write(self: *Self, buf: []const u8) callconv(.Async) !usize {
-        return pike.Notifier.call(&self.handle, os.write, .{ self.handle.inner, buf }, .{ .write = true });
+        return self.call(os.write, .{ self.handle.inner, buf }, .{ .write = true });
     }
 
     pub fn send(self: *Self, buf: []const u8, flags: u32) callconv(.Async) !usize {
@@ -164,7 +200,7 @@ pub const Socket = struct {
     }
 
     pub fn sendTo(self: *Self, buf: []const u8, flags: u32, address: ?net.Address) callconv(.Async) !usize {
-        return pike.Notifier.call(&self.handle, os.sendto, .{
+        return self.call(os.sendto, .{
             self.handle.inner,
             buf,
             flags,
