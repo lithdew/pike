@@ -241,13 +241,13 @@ pub const Socket = struct {
     }
 };
 
-fn run(poller: *const Kqueue, stopped: *bool) !void {
+fn run(notifier: *const Kqueue, stopped: *bool) !void {
     defer stopped.* = true;
 
     var socket = try Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0);
     defer socket.deinit();
 
-    try poller.register(&socket.handle, .{ .read = true, .write = true });
+    try notifier.register(&socket.handle, .{ .read = true, .write = true });
     try socket.connect(try net.Address.parseIp("127.0.0.1", 9000));
 
     var buf: [1024]u8 = undefined;
@@ -258,13 +258,13 @@ fn run(poller: *const Kqueue, stopped: *bool) !void {
     _ = try socket.send("Hello world!\n", 0);
 }
 
-fn runBenchmarkServer(poller: *const Kqueue, stopped: *bool) !void {
+fn runBenchmarkServer(notifier: *const Kqueue, stopped: *bool) !void {
     defer stopped.* = true;
 
     var socket = try Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0);
     defer socket.deinit();
 
-    try poller.register(&socket.handle, .{ .read = true, .write = true });
+    try notifier.register(&socket.handle, .{ .read = true, .write = true });
 
     try socket.set(.reuse_address, true);
     try socket.bind(try net.Address.parseIp("127.0.0.1", 9000));
@@ -273,7 +273,7 @@ fn runBenchmarkServer(poller: *const Kqueue, stopped: *bool) !void {
     var client = try socket.accept();
     defer client.deinit();
 
-    try poller.register(&client.handle, .{ .read = true, .write = true });
+    try notifier.register(&client.handle, .{ .read = true, .write = true });
 
     var buf: [65536]u8 = undefined;
     while (true) {
@@ -281,13 +281,13 @@ fn runBenchmarkServer(poller: *const Kqueue, stopped: *bool) !void {
     }
 }
 
-fn runBenchmarkClient(poller: *const Kqueue, stopped: *bool) !void {
+fn runBenchmarkClient(notifier: *const Kqueue, stopped: *bool) !void {
     defer stopped.* = true;
 
     var socket = try Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0);
     defer socket.deinit();
 
-    try poller.register(&socket.handle, .{ .read = true, .write = true });
+    try notifier.register(&socket.handle, .{ .read = true, .write = true });
 
     try socket.connect(try net.Address.parseIp("127.0.0.1", 9000));
 
@@ -298,17 +298,17 @@ fn runBenchmarkClient(poller: *const Kqueue, stopped: *bool) !void {
 }
 
 pub fn main() !void {
-    const poller = try Kqueue.init();
-    defer poller.deinit();
+    const notifier = try Kqueue.init();
+    defer notifier.deinit();
 
     var stopped = false;
 
-    // var frame = async run(&poller, &stopped);
-    var server_frame = async runBenchmarkServer(&poller, &stopped);
-    var client_frame = async runBenchmarkClient(&poller, &stopped);
+    // var frame = async run(&notifier, &stopped);
+    var server_frame = async runBenchmarkServer(&notifier, &stopped);
+    var client_frame = async runBenchmarkClient(&notifier, &stopped);
 
     while (!stopped) {
-        try poller.poll(10000);
+        try notifier.poll(10000);
     }
 
     // try nosuspend await frame;

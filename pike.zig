@@ -13,14 +13,14 @@ pub const CallOptions = packed struct {
 
 pub const Handle = struct {};
 
-pub const Poller = struct {
+pub const Notifier = struct {
     inner: usize,
     vtable: struct {
         register: fn (self: usize, handle: *const Handle, comptime opts: PollOptions) anyerror!void,
         poll: fn (self: usize, timeout: i32) anyerror!void,
     },
 
-    pub fn from(inner: anytype) Poller {
+    pub fn from(inner: anytype) Notifier {
         const Impl = meta.Child(@TypeOf(inner));
 
         return .{
