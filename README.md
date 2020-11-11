@@ -9,10 +9,12 @@ A minimal cross-platform high-performance async I/O library written in [Zig](htt
     - [x] kqueue (darwin)
     - [x] i/o completion ports (windows)
 - [x] Async POSIX socket support
+    - [x] `bind`, `listen`, `connect`, `accept`
     - [x] `read`, `recv`, `recvFrom`
     - [x] `write`, `send`, `sendTo`
     - [x] get/set socket options
 - [x] Async Windows socket support
+    - [x] `bind`, `listen`, `connect`, `accept`
     - [x] `read`, `recv`, `recvFrom`
     - [x] `write`, `send`, `sendTo`
     - [x] get/set socket options
