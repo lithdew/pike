@@ -29,23 +29,17 @@ fn runBenchmarkServer(notifier: *const pike.Notifier, stopped: *bool) !void {
 
     const address = try net.Address.parseIp("127.0.0.1", 9000);
 
-    var socket = try pike.Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0);
+    var socket = try pike.Socket.init(os.AF_INET, os.SOCK_DGRAM, 0, 0);
     defer socket.deinit();
 
     try notifier.register(&socket.handle, .{ .read = true, .write = true });
 
     try socket.set(.reuse_address, true);
     try socket.bind(address);
-    try socket.listen(128);
 
-    var client = try socket.accept();
-    defer client.deinit();
-
-    try notifier.register(&client.handle, .{ .read = true, .write = true });
-
-    var buf: [65536]u8 = undefined;
+    var buf: [1400]u8 = undefined;
     while (true) {
-        _ = try client.send(&buf, 0);
+        _ = try socket.recvFrom(&buf, 0, null);
     }
 }
 
@@ -54,15 +48,13 @@ fn runBenchmarkClient(notifier: *const pike.Notifier, stopped: *bool) !void {
 
     const address = try net.Address.parseIp("127.0.0.1", 9000);
 
-    var socket = try pike.Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0);
+    var socket = try pike.Socket.init(os.AF_INET, os.SOCK_DGRAM, 0, 0);
     defer socket.deinit();
 
     try notifier.register(&socket.handle, .{ .read = true, .write = true });
 
-    try socket.connect(address);
-
-    var buf: [65536]u8 = undefined;
+    var buf: [1400]u8 = undefined;
     while (true) {
-        _ = try socket.recv(&buf, 0);
+        _ = try socket.sendTo(&buf, 0, address);
     }
 }

@@ -8,6 +8,9 @@ const mem = std.mem;
 
 usingnamespace @import("waker.zig");
 
+pub inline fn init() !void {}
+pub inline fn deinit() void {}
+
 pub const Handle = struct {
     const Self = @This();
 

@@ -7,6 +7,13 @@ const os = std.os;
 const net = std.net;
 const math = std.math;
 
+pub inline fn init() !void {
+    const info = try windows.WSAStartup(2, 2);
+}
+pub inline fn deinit() void {
+    windows.WSACleanup() catch unreachable;
+}
+
 pub const Handle = struct {
     const Self = @This();
 
