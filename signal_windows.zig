@@ -55,7 +55,7 @@ pub const Signal = struct {
     pub fn init(signal: SignalType) !Self {
         errdefer _ = @atomicRmw(u64, &refs, .Sub, 1, .SeqCst);
 
-        if (@atomicRmw(u64, &refs, .Add, 1, .SeqCst) == 1) {
+        if (@atomicRmw(u64, &refs, .Add, 1, .SeqCst) == 0) {
             try windows.SetConsoleCtrlHandler(handler, true);
         }
 
@@ -70,12 +70,13 @@ pub const Signal = struct {
 
     pub fn deinit(self: *const Self) void {
         @atomicStore(u64, &mask, self.prev, .SeqCst);
-        if (@atomicRmw(u64, &refs, .Sub, 1, .SeqCst) == 0) {
+        if (@atomicRmw(u64, &refs, .Sub, 1, .SeqCst) == 1) {
             windows.SetConsoleCtrlHandler(handler, false) catch unreachable;
         }
     }
 
     pub fn wait(self: *const Self) callconv(.Async) !void {
+        defer if (waker.next(&lock, self.signal)) |frame| resume frame;
         waker.wait(&lock, self.signal);
     }
 };

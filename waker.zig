@@ -235,19 +235,15 @@ pub fn PackedWaker(comptime Set: type) type {
             const held = lock.acquire();
             defer held.release();
 
-            var any_ready = false;
-            inline for (set_fields) |field, field_index| {
-                if (@field(set, field.name)) {
-                    if (self.ready[field_index]) any_ready = true;
-                    if (self.heads[field_index] == null) {
+            return FrameList.pop(&self.heads, set) orelse blk: {
+                inline for (set_fields) |field, field_index| {
+                    if (@field(set, field.name) and self.heads[field_index] == null) {
                         self.ready[field_index] = true;
-                        any_ready = true;
                     }
                 }
-            }
-            if (any_ready) return null;
 
-            return FrameList.pop(&self.heads, set);
+                break :blk null;
+            };
         }
 
         pub fn next(self: *Self, lock: *std.Mutex, set: Set) ?anyframe {
