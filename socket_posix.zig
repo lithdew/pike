@@ -81,8 +81,11 @@ pub const Socket = struct {
         };
     }
 
-    pub fn deinit(self: *const Self) void {
+    pub fn deinit(self: *Self) void {
         os.close(self.handle.inner);
+
+        while (self.readers.next(&self.lock)) |frame| resume frame;
+        while (self.writers.next(&self.lock)) |frame| resume frame;
     }
 
     fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {

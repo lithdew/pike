@@ -85,6 +85,7 @@ pub const Signal = struct {
     pub fn deinit(self: *const Self) void {
         os.close(self.handle.inner);
         posix.sigprocmask(os.SIG_SETMASK, &self.prev, null) catch {};
+        while (self.readers.next(&self.lock)) |frame| resume frame;
     }
 
     fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {

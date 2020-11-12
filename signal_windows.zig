@@ -2,6 +2,7 @@ const std = @import("std");
 const pike = @import("pike.zig");
 const windows = @import("os/windows.zig");
 
+const math = std.math;
 const meta = std.meta;
 
 usingnamespace @import("waker.zig");
@@ -72,6 +73,9 @@ pub const Signal = struct {
         @atomicStore(u64, &mask, self.prev, .SeqCst);
         if (@atomicRmw(u64, &refs, .Sub, 1, .SeqCst) == 1) {
             windows.SetConsoleCtrlHandler(handler, false) catch unreachable;
+            while (self.waker.next(&self.lock, @bitCast(SignalSet, math.maxInt(MaskInt)))) |frame| {
+                resume frame;
+            }
         }
     }
 
