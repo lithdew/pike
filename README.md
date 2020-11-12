@@ -22,7 +22,7 @@ A minimal cross-platform high-performance async I/O library written in [Zig](htt
     - [x] signalfd (linux)
     - [x] kqueue EVFILT_SIGNAL (darwin)
     - [x] SetConsoleCtrlHandler (windows)
-- [x] Post notifications to I/O reactor/proactors
+- [x] Async event support
     - [x] eventfd for epoll (linux)
     - [ ] pipefd for kqueue (darwin)
     - [ ] i/o completion ports (windows)
