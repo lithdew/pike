@@ -196,19 +196,19 @@ test "List.append() / List.prepend() / List.pop()" {
     }
 }
 
-pub fn PackedWaker(comptime Set: type) type {
+pub fn PackedWaker(comptime Frame: type, comptime Set: type) type {
     const set_fields = meta.fields(Set);
     const set_count = set_fields.len;
 
     return struct {
-        const FrameList = PackedList(anyframe, Set);
+        const FrameList = PackedList(Frame, Set);
         const FrameNode = FrameList.Node;
         const Self = @This();
 
         ready: [set_count]bool = [_]bool{false} ** set_count,
         heads: [set_count]?*FrameNode = [_]?*FrameNode{null} ** set_count,
 
-        pub fn wait(self: *Self, lock: *std.Mutex, set: Set) callconv(.Async) void {
+        pub fn wait(self: *Self, lock: *std.Mutex, set: Set, data: Frame) callconv(.Async) void {
             const held = lock.acquire();
 
             var any_ready = false;
@@ -225,13 +225,13 @@ pub fn PackedWaker(comptime Set: type) type {
                 held.release();
             } else {
                 suspend {
-                    FrameList.append(&self.heads, set, &FrameNode{ .data = @frame() });
+                    FrameList.append(&self.heads, set, &FrameNode{ .data = data });
                     held.release();
                 }
             }
         }
 
-        pub fn wake(self: *Self, lock: *std.Mutex, set: Set) ?anyframe {
+        pub fn wake(self: *Self, lock: *std.Mutex, set: Set) ?Frame {
             const held = lock.acquire();
             defer held.release();
 
@@ -246,7 +246,7 @@ pub fn PackedWaker(comptime Set: type) type {
             };
         }
 
-        pub fn next(self: *Self, lock: *std.Mutex, set: Set) ?anyframe {
+        pub fn next(self: *Self, lock: *std.Mutex, set: Set) ?Frame {
             const held = lock.acquire();
             defer held.release();
 
@@ -270,14 +270,14 @@ test "PackedWaker.wake() / PackedWaker.wait()" {
     };
 
     const Test = struct {
-        fn do(waker: *PackedWaker(Set), lock: *std.Mutex, set: Set, completed: *bool) callconv(.Async) void {
+        fn do(waker: *PackedWaker(anyframe, Set), lock: *std.Mutex, set: Set, completed: *bool) callconv(.Async) void {
             defer completed.* = true;
             waker.wait(lock, set);
         }
     };
 
     var lock: std.Mutex = .{};
-    var waker: PackedWaker(Set) = .{};
+    var waker: PackedWaker(anyframe, Set) = .{};
 
     testing.expect(waker.wake(&lock, .{ .a = true, .b = true, .c = true, .d = true }) == @as(?anyframe, null));
     testing.expect(mem.allEqual(bool, &waker.ready, true));
