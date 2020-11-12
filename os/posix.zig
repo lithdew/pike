@@ -5,6 +5,10 @@ const builtin = std.builtin;
 
 usingnamespace std.os;
 
+pub const SHUT_RD = 0;
+pub const SHUT_WR = 1;
+pub const SHUT_RDWR = 2;
+
 pub const LINGER = extern struct {
     l_onoff: c_int, // Whether or not a socket should remain open to send queued dataa after closesocket() is called.
     l_linger: c_int, // Number of seconds on how long a socket should remain open after closesocket() is called.
