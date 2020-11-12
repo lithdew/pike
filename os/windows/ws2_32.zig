@@ -42,6 +42,13 @@ pub const WSAID_ACCEPTEX = windows.GUID{
     .Data4 = [8]u8{ 0x95, 0xca, 0x00, 0x80, 0x5f, 0x48, 0xa1, 0x92 },
 };
 
+pub const WSAID_GETACCEPTEXSOCKADDRS = windows.GUID{
+    .Data1 = 0xb5367df2,
+    .Data2 = 0xcbac,
+    .Data3 = 0x11cf,
+    .Data4 = [8]u8{ 0x95, 0xca, 0x00, 0x80, 0x5f, 0x48, 0xa1, 0x92 },
+};
+
 pub const sockaddr_storage = extern struct {
     family: ADDRESS_FAMILY,
     __ss_padding: [128 - @sizeOf(windows.ULONGLONG) - @sizeOf(ADDRESS_FAMILY)]u8,
@@ -88,3 +95,14 @@ pub const AcceptEx = fn (
     lpdwBytesReceived: ?*windows.DWORD,
     lpOverlapped: *windows.OVERLAPPED,
 ) callconv(.Stdcall) windows.BOOL;
+
+pub const GetAcceptExSockaddrs = fn (
+    lpOutputBuffer: [*]const u8,
+    dwReceiveDataLength: windows.DWORD,
+    dwLocalAddressLength: socklen_t,
+    dwRemoteAddressLength: socklen_t,
+    LocalSockaddr: **sockaddr,
+    LocalSockaddrLength: *windows.INT,
+    RemoteSockaddr: **sockaddr,
+    RemoteSockaddrLength: *windows.INT,
+) callconv(.Stdcall) void;

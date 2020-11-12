@@ -182,16 +182,30 @@ pub const Socket = struct {
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             @ptrCast(ws2_32.SOCKET, incoming.handle.inner),
             &buf,
+            @sizeOf(ws2_32.sockaddr_storage),
+            @sizeOf(ws2_32.sockaddr_storage),
             &num_bytes,
             OVERLAPPED_PARAM,
         }, .{});
 
-        const addr_len = mem.readIntNative(u32, buf[0..4]);
-        const addr: *align(4) ws2_32.sockaddr = @ptrCast(*align(4) ws2_32.sockaddr, @alignCast(4, buf[4..][0..addr_len]));
+        var local_addr: *ws2_32.sockaddr = undefined;
+        var remote_addr: *ws2_32.sockaddr = undefined;
+
+        try windows.GetAcceptExSockaddrs(
+            @ptrCast(ws2_32.SOCKET, self.handle.inner),
+            &buf,
+            @as(c_int, @sizeOf(ws2_32.sockaddr_storage)),
+            @as(c_int, @sizeOf(ws2_32.sockaddr_storage)),
+            &local_addr,
+            &remote_addr,
+        );
 
         try incoming.set(.update_accept_context, @ptrCast(ws2_32.SOCKET, self.handle.inner));
 
-        return Connection{ .socket = incoming, .address = net.Address.initPosix(addr) };
+        return Connection{
+            .socket = incoming,
+            .address = net.Address.initPosix(@alignCast(4, remote_addr)),
+        };
     }
 
     pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {
