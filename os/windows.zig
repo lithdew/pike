@@ -158,20 +158,17 @@ pub fn getBaseSocket(socket: ws2_32.SOCKET) !ws2_32.SOCKET {
     return err;
 }
 
-pub fn AcceptEx(listening_socket: ws2_32.SOCKET, accepted_socket: ws2_32.SOCKET, overlapped: *OVERLAPPED) !void {
+pub fn AcceptEx(listening_socket: ws2_32.SOCKET, accepted_socket: ws2_32.SOCKET, buf: []u8, num_bytes: *DWORD, overlapped: *OVERLAPPED) !void {
     const func = try loadWinsockExtensionFunction(@import("windows/ws2_32.zig").AcceptEx, listening_socket, @import("windows/ws2_32.zig").WSAID_ACCEPTEX);
-
-    var buf: [2 * @sizeOf(@import("windows/ws2_32.zig").sockaddr_storage) + 32]u8 = undefined;
-    var num_bytes: DWORD = undefined;
 
     const success = func(
         listening_socket,
         accepted_socket,
-        &buf,
+        buf.ptr,
         0,
-        @sizeOf(@import("windows/ws2_32.zig").sockaddr_storage),
-        @sizeOf(@import("windows/ws2_32.zig").sockaddr_storage),
-        &num_bytes,
+        @truncate(u32, buf.len),
+        @truncate(u32, buf.len),
+        num_bytes,
         overlapped,
     );
 

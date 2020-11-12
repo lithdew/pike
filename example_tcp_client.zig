@@ -33,6 +33,8 @@ fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
     try socket.registerTo(notifier);
     try socket.connect(address);
 
+    std.debug.print("Connected to: {}\n", .{address});
+
     var buf: [1024]u8 = undefined;
     std.debug.print("Got: {}", .{buf[0..try socket.read(&buf)]});
     std.debug.print("Got: {}", .{buf[0..try socket.recv(&buf, 0)]});

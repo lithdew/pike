@@ -59,6 +59,11 @@ pub const SocketOption = union(SocketOptionType) {
     socket_type: u32,
 };
 
+pub const Connection = struct {
+    socket: Socket,
+    address: net.Address,
+};
+
 pub const Socket = struct {
     const Self = @This();
 
@@ -158,7 +163,7 @@ pub const Socket = struct {
         try os.listen(self.handle.inner, @truncate(u31, backlog));
     }
 
-    pub fn accept(self: *Self) callconv(.Async) !Socket {
+    pub fn accept(self: *Self) callconv(.Async) !Connection {
         var addr: os.sockaddr = undefined;
         var addr_len: os.socklen_t = @sizeOf(@TypeOf(addr));
 
@@ -169,7 +174,10 @@ pub const Socket = struct {
             os.SOCK_NONBLOCK | os.SOCK_CLOEXEC,
         }, .{ .read = true });
 
-        return Socket{ .handle = .{ .inner = handle, .wake_fn = wake } };
+        return Connection{
+            .socket = Socket{ .handle = .{ .inner = handle, .wake_fn = wake } },
+            .address = net.Address.initPosix(@alignCast(4, &addr)),
+        };
     }
 
     pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {

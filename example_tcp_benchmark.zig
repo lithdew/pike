@@ -38,14 +38,18 @@ fn runBenchmarkServer(notifier: *const pike.Notifier, stopped: *bool) !void {
     try socket.bind(address);
     try socket.listen(128);
 
-    var client = try socket.accept();
-    defer client.deinit();
+    std.debug.print("Listening for clients on: {}\n", .{address});
 
-    try client.registerTo(notifier);
+    var client = try socket.accept();
+    defer client.socket.deinit();
+
+    std.debug.print("Accepted client: {}\n", .{client.address});
+
+    try client.socket.registerTo(notifier);
 
     var buf: [65536]u8 = undefined;
     while (true) {
-        _ = try client.send(&buf, 0);
+        _ = try client.socket.send(&buf, 0);
     }
 }
 
@@ -58,8 +62,9 @@ fn runBenchmarkClient(notifier: *const pike.Notifier, stopped: *bool) !void {
     defer socket.deinit();
 
     try socket.registerTo(notifier);
-
     try socket.connect(address);
+
+    std.debug.print("Connected to: {}\n", .{address});
 
     var buf: [65536]u8 = undefined;
     while (true) {

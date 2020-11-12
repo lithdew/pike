@@ -73,6 +73,11 @@ pub const SocketOption = union(SocketOptionType) {
     update_accept_context: ?ws2_32.SOCKET,
 };
 
+pub const Connection = struct {
+    socket: Socket,
+    address: net.Address,
+};
+
 pub const Socket = struct {
     const Self = @This();
 
@@ -159,7 +164,7 @@ pub const Socket = struct {
         try windows.listen_(@ptrCast(ws2_32.SOCKET, self.handle.inner), backlog);
     }
 
-    pub fn accept(self: *Self) callconv(.Async) !Socket {
+    pub fn accept(self: *Self) callconv(.Async) !Connection {
         const info = try self.get(.protocol_info_w);
 
         var incoming = try Self.init(
@@ -170,15 +175,23 @@ pub const Socket = struct {
         );
         errdefer incoming.deinit();
 
+        var buf: [2 * @sizeOf(ws2_32.sockaddr_storage) + 32]u8 = undefined;
+        var num_bytes: windows.DWORD = undefined;
+
         const overlapped = try self.call(windows.AcceptEx, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             @ptrCast(ws2_32.SOCKET, incoming.handle.inner),
+            &buf,
+            &num_bytes,
             OVERLAPPED_PARAM,
         }, .{});
 
+        const addr_len = mem.readIntNative(u32, buf[0..4]);
+        const addr: *align(4) ws2_32.sockaddr = @ptrCast(*align(4) ws2_32.sockaddr, @alignCast(4, buf[4..][0..addr_len]));
+
         try incoming.set(.update_accept_context, @ptrCast(ws2_32.SOCKET, self.handle.inner));
 
-        return incoming;
+        return Connection{ .socket = incoming, .address = net.Address.initPosix(addr) };
     }
 
     pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {
