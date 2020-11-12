@@ -3,8 +3,22 @@ const pike = @import("pike.zig");
 
 const os = std.os;
 const net = std.net;
+const mem = std.mem;
+const heap = std.heap;
+const process = std.process;
 
 pub fn main() !void {
+    var gpa: heap.GeneralPurposeAllocator(.{}) = .{};
+    defer _ = gpa.deinit();
+
+    const allocator = &gpa.allocator;
+
+    const args = try process.argsAlloc(allocator);
+    defer process.argsFree(allocator, args);
+
+    const run_server = args.len == 1 or (args.len > 1 and mem.eql(u8, args[1], "server"));
+    const run_client = args.len == 1 or (args.len > 1 and mem.eql(u8, args[1], "client"));
+
     try pike.init();
     defer pike.deinit();
 
@@ -13,15 +27,19 @@ pub fn main() !void {
 
     var stopped = false;
 
-    var server_frame = async runBenchmarkServer(&notifier, &stopped);
-    var client_frame = async runBenchmarkClient(&notifier, &stopped);
+    if (run_server) {
+        var server_frame = async runBenchmarkServer(&notifier, &stopped);
+        defer nosuspend await server_frame catch unreachable;
+    }
+
+    if (run_client) {
+        var client_frame = async runBenchmarkClient(&notifier, &stopped);
+        defer nosuspend await client_frame catch unreachable;
+    }
 
     while (!stopped) {
         try notifier.poll(10_000);
     }
-
-    try nosuspend await server_frame;
-    try nosuspend await client_frame;
 }
 
 fn runBenchmarkServer(notifier: *const pike.Notifier, stopped: *bool) !void {
