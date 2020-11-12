@@ -22,6 +22,22 @@ pub const WakeOptions = packed struct {
 const has_epoll = @hasDecl(os.system, "epoll_create1") and @hasDecl(os.system, "epoll_ctl") and @hasDecl(os, "epoll_event");
 const has_kqueue = @hasDecl(os.system, "kqueue") and @hasDecl(os.system, "kevent") and @hasDecl(os, "Kevent");
 
+// Export asynchronous frame dispatcher and user scope (context).
+
+pub const scope = if (@hasDecl(root, "dispatch_data"))
+    root.dispatch_data
+else
+    @as(?usize, null);
+
+pub const dispatch: fn (data: @TypeOf(scope), frame: anyframe) void = if (@hasDecl(root, "dispatch"))
+    root.dispatch
+else
+    struct {
+        inline fn default(data: @TypeOf(scope), frame: anyframe) void {
+            resume frame;
+        }
+    }.default;
+
 // Export 'Notifier' and 'Handle'.
 
 pub usingnamespace if (@hasDecl(root, "notifier"))

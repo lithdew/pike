@@ -27,8 +27,8 @@ pub const Event = struct {
     pub fn deinit(self: *Self) void {
         os.close(self.handle.inner);
 
-        while (self.readers.next(&self.lock)) |frame| resume frame;
-        while (self.writers.next(&self.lock)) |frame| resume frame;
+        while (self.readers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
+        while (self.writers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
@@ -37,12 +37,12 @@ pub const Event = struct {
 
     inline fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
-        if (opts.read_ready) if (self.readers.wake(&self.lock)) |frame| resume frame;
-        if (opts.write_ready) if (self.writers.wake(&self.lock)) |frame| resume frame;
+        if (opts.read_ready) if (self.readers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
+        if (opts.write_ready) if (self.writers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
     }
 
     fn write(self: *Self, amount: u64) callconv(.Async) !void {
-        defer if (self.writers.next(&self.lock)) |frame| resume frame;
+        defer if (self.writers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
 
         while (true) {
             const num_bytes = os.write(self.handle.inner, mem.asBytes(&amount)) catch |err| switch (err) {
@@ -62,7 +62,7 @@ pub const Event = struct {
     }
 
     fn read(self: *Self) callconv(.Async) !void {
-        defer if (self.writers.next(&self.lock)) |frame| resume frame;
+        defer if (self.writers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
 
         var counter: u64 = 0;
 

@@ -86,7 +86,7 @@ pub const Signal = struct {
         if (@atomicRmw(u64, &refs, .Sub, 1, .SeqCst) == 1) {
             windows.SetConsoleCtrlHandler(handler, false) catch unreachable;
             while (waker.next(&lock, @bitCast(SignalType, @as(MaskInt, math.maxInt(MaskInt))))) |data| {
-                resume data.overlapped.frame;
+                pike.dispatch(pike.user_data, data.overlapped.frame);
             }
         }
     }
@@ -98,7 +98,7 @@ pub const Signal = struct {
     pub fn wait(self: *const Self) callconv(.Async) !void {
         if (self.port == windows.INVALID_HANDLE_VALUE) return error.NotRegistered;
 
-        defer if (waker.next(&lock, self.current_signal)) |data| resume data.overlapped.frame;
+        defer if (waker.next(&lock, self.current_signal)) |data| pike.dispatch(pike.scope, data.overlapped.frame);
 
         var data = Data{
             .port = self.port,

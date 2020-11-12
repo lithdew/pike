@@ -90,8 +90,8 @@ pub const Socket = struct {
         self.shutdown(posix.SHUT_RDWR) catch {};
         os.close(self.handle.inner);
 
-        while (self.readers.next(&self.lock)) |frame| resume frame;
-        while (self.writers.next(&self.lock)) |frame| resume frame;
+        while (self.readers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
+        while (self.writers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
@@ -100,13 +100,13 @@ pub const Socket = struct {
 
     inline fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
-        if (opts.read_ready) if (self.readers.wake(&self.lock)) |frame| resume frame;
-        if (opts.write_ready) if (self.writers.wake(&self.lock)) |frame| resume frame;
+        if (opts.read_ready) if (self.readers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
+        if (opts.write_ready) if (self.writers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
     }
 
     fn call(self: *Self, comptime function: anytype, args: anytype, comptime opts: pike.CallOptions) callconv(.Async) @typeInfo(@TypeOf(function)).Fn.return_type.? {
-        defer if (comptime opts.read) if (self.readers.next(&self.lock)) |frame| resume frame;
-        defer if (comptime opts.write) if (self.writers.next(&self.lock)) |frame| resume frame;
+        defer if (comptime opts.read) if (self.readers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
+        defer if (comptime opts.write) if (self.writers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
 
         while (true) {
             const result = @call(.{ .modifier = .always_inline }, function, args) catch |err| switch (err) {
