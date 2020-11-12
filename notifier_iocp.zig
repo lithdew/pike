@@ -12,7 +12,7 @@ pub inline fn init() !void {
 }
 
 pub inline fn deinit() void {
-    windows.WSACleanup() catch unreachable;
+    windows.WSACleanup() catch {};
 }
 
 pub const Handle = struct {

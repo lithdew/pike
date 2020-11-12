@@ -345,6 +345,7 @@ pub fn getsockoptError(handle: ws2_32.SOCKET) !void {
             .WSAENOTSOCK => unreachable, // The file descriptor sockfd does not refer to a socket.
             .WSAEPROTOTYPE => unreachable, // The socket type does not support the requested communications protocol.
             .WSAETIMEDOUT => error.ConnectionTimedOut,
+            .WSAESHUTDOWN => error.AlreadyShutdown,
             else => |err| unexpectedWSAError(err),
         };
     }
@@ -366,6 +367,8 @@ pub const SetSockOptError = error{
     NetworkSubsystemFailed,
     FileDescriptorNotASocket,
     SocketNotBound,
+    SocketNotConnected,
+    AlreadyShutdown,
 } || std.os.UnexpectedError;
 
 pub fn setsockopt(sock: ws2_32.SOCKET, level: u32, opt: u32, val: ?[]const u8) SetSockOptError!void {
@@ -377,6 +380,8 @@ pub fn setsockopt(sock: ws2_32.SOCKET, level: u32, opt: u32, val: ?[]const u8) S
             .WSAEFAULT => unreachable,
             .WSAENOTSOCK => return error.FileDescriptorNotASocket,
             .WSAEINVAL => return error.SocketNotBound,
+            .WSAENOTCONN => return error.SocketNotConnected,
+            .WSAESHUTDOWN => return error.AlreadyShutdown,
             else => |err| return unexpectedWSAError(err),
         }
     }

@@ -213,7 +213,9 @@ pub const Socket = struct {
         const overlapped = self.call(windows.ReadFile_, .{
             self.handle.inner, buf, OVERLAPPED_PARAM,
         }, .{}) catch |err| switch (err) {
-            error.EndOfFile => return 0,
+            error.EndOfFile,
+            error.AlreadyShutdown,
+            => return 0,
             else => return err,
         };
 
