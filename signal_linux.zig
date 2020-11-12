@@ -52,7 +52,11 @@ pub const Signal = struct {
         while (self.readers.next(&self.lock)) |frame| resume frame;
     }
 
-    fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
+    pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
+        try notifier.register(&self.handle, .{ .read = true });
+    }
+
+    inline fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
         if (opts.read_ready) if (self.readers.wake(&self.lock)) |frame| resume frame;
         if (opts.write_ready) @panic("pike/signal (linux): signalfd unexpectedly reported write-readiness");

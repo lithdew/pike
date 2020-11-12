@@ -97,6 +97,10 @@ pub const Socket = struct {
         windows.closesocket(@ptrCast(ws2_32.SOCKET, self.handle.inner)) catch {};
     }
 
+    pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
+        try notifier.register(&self.handle, .{ .read = true, .write = true });
+    }
+
     inline fn call(self: *Self, comptime function: anytype, raw_args: anytype, comptime opts: pike.CallOptions) callconv(.Async) !pike.Overlapped {
         var overlapped = pike.Overlapped.init(@frame());
         var args = raw_args;

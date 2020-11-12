@@ -82,13 +82,17 @@ pub const Signal = struct {
         };
     }
 
-    pub fn deinit(self: *const Self) void {
+    pub fn deinit(self: *Self) void {
         os.close(self.handle.inner);
         posix.sigprocmask(os.SIG_SETMASK, &self.prev, null) catch {};
         while (self.readers.next(&self.lock)) |frame| resume frame;
     }
 
-    fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
+    pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
+        try notifier.register(&self.handle, .{ .read = true });
+    }
+
+    inline fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
         if (opts.read_ready) if (self.readers.wake(&self.lock)) |frame| resume frame;
         if (opts.write_ready) @panic("pike/signal (darwin): kqueue unexpectedly reported read-readiness");

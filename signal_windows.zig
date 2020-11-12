@@ -24,7 +24,6 @@ pub const Signal = struct {
     var lock: std.Mutex = .{};
     var waker: PackedWaker(SignalType) = .{};
 
-    handle: pike.Handle,
     signal: SignalType,
     prev: u64 = 0,
 
@@ -63,7 +62,6 @@ pub const Signal = struct {
         const prev = @atomicRmw(u64, &mask, .Or, @intCast(u64, @bitCast(MaskInt, signal)), .SeqCst);
 
         return Self{
-            .handle = .{ .inner = windows.INVALID_HANDLE_VALUE },
             .signal = signal,
             .prev = prev,
         };
@@ -73,11 +71,13 @@ pub const Signal = struct {
         @atomicStore(u64, &mask, self.prev, .SeqCst);
         if (@atomicRmw(u64, &refs, .Sub, 1, .SeqCst) == 1) {
             windows.SetConsoleCtrlHandler(handler, false) catch unreachable;
-            while (self.waker.next(&self.lock, @bitCast(SignalSet, math.maxInt(MaskInt)))) |frame| {
+            while (self.waker.next(&lock, @bitCast(SignalSet, math.maxInt(MaskInt)))) |frame| {
                 resume frame;
             }
         }
     }
+
+    pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {}
 
     pub fn wait(self: *const Self) callconv(.Async) !void {
         defer if (waker.next(&lock, self.signal)) |frame| resume frame;

@@ -27,7 +27,7 @@ fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
     var signal = try pike.Signal.init(.{ .interrupt = true });
     defer signal.deinit();
 
-    try notifier.register(&signal.handle, .{ .read = true });
+    try signal.registerTo(notifier);
 
     std.debug.print("Press Ctrl+C.\n", .{});
 

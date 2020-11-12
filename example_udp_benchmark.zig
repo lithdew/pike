@@ -32,7 +32,7 @@ fn runBenchmarkServer(notifier: *const pike.Notifier, stopped: *bool) !void {
     var socket = try pike.Socket.init(os.AF_INET, os.SOCK_DGRAM, 0, 0);
     defer socket.deinit();
 
-    try notifier.register(&socket.handle, .{ .read = true, .write = true });
+    try socket.registerTo(notifier);
 
     try socket.set(.reuse_address, true);
     try socket.bind(address);
@@ -51,7 +51,7 @@ fn runBenchmarkClient(notifier: *const pike.Notifier, stopped: *bool) !void {
     var socket = try pike.Socket.init(os.AF_INET, os.SOCK_DGRAM, 0, 0);
     defer socket.deinit();
 
-    try notifier.register(&socket.handle, .{ .read = true, .write = true });
+    try socket.registerTo(notifier);
 
     var buf: [1400]u8 = undefined;
     while (true) {

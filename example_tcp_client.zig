@@ -30,7 +30,7 @@ fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
     var socket = try pike.Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0);
     defer socket.deinit();
 
-    try notifier.register(&socket.handle, .{ .read = true, .write = true });
+    try socket.registerTo(notifier);
     try socket.connect(address);
 
     var buf: [1024]u8 = undefined;
