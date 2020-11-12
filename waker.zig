@@ -44,8 +44,10 @@ pub const Waker = packed struct {
             return;
         }
 
+        var node = List(anyframe).Node{ .data = @frame() };
+
         suspend {
-            self.append(&List(anyframe).Node{ .data = @frame() });
+            self.append(&node);
             held.release();
         }
     }
@@ -224,9 +226,10 @@ pub fn PackedWaker(comptime Frame: type, comptime Set: type) type {
             if (any_ready) {
                 held.release();
             } else {
+                var node = FrameNode{ .data = data };
                 suspend {
+                    FrameList.append(&self.heads, set, &node);
                     frame.* = @frame();
-                    FrameList.append(&self.heads, set, &FrameNode{ .data = data });
                     held.release();
                 }
             }

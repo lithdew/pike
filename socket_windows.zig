@@ -101,7 +101,7 @@ pub const Socket = struct {
         try notifier.register(&self.handle, .{ .read = true, .write = true });
     }
 
-    inline fn call(self: *Self, comptime function: anytype, raw_args: anytype, comptime opts: pike.CallOptions) callconv(.Async) !pike.Overlapped {
+    fn call(self: *Self, comptime function: anytype, raw_args: anytype, comptime opts: pike.CallOptions) callconv(.Async) !pike.Overlapped {
         var overlapped = pike.Overlapped.init(@frame());
         var args = raw_args;
 
