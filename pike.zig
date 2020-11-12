@@ -57,5 +57,7 @@ else
 
 pub usingnamespace if (has_epoll)
     @import("event_epoll.zig")
+else if (has_kqueue)
+    @import("event_kqueue.zig")
 else
     @compileError("pike: unable to figure out a 'Event' implementation to use for the build target");
