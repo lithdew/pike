@@ -227,6 +227,7 @@ pub fn PackedWaker(comptime Frame: type, comptime Set: type) type {
                 held.release();
             } else {
                 var node = FrameNode{ .data = data };
+
                 suspend {
                     FrameList.append(&self.heads, set, &node);
                     frame.* = @frame();
@@ -273,20 +274,27 @@ test "PackedWaker.wake() / PackedWaker.wait()" {
         d: bool = false,
     };
 
+    const Scope = struct {
+        inner: anyframe,
+    };
+
     const Test = struct {
-        fn do(waker: *PackedWaker(anyframe, Set), lock: *std.Mutex, set: Set, completed: *bool) callconv(.Async) void {
+        fn do(waker: *PackedWaker(*Scope, Set), lock: *std.Mutex, set: Set, completed: *bool) callconv(.Async) void {
             defer completed.* = true;
-            waker.wait(lock, set);
+
+            var scope = Scope{ .inner = undefined };
+            waker.wait(lock, set, &scope, &scope.inner);
         }
     };
 
     var lock: std.Mutex = .{};
-    var waker: PackedWaker(anyframe, Set) = .{};
+    var waker: PackedWaker(*Scope, Set) = .{};
 
-    testing.expect(waker.wake(&lock, .{ .a = true, .b = true, .c = true, .d = true }) == @as(?anyframe, null));
+    testing.expect(waker.wake(&lock, .{ .a = true, .b = true, .c = true, .d = true }) == null);
     testing.expect(mem.allEqual(bool, &waker.ready, true));
 
-    nosuspend waker.wait(&lock, .{ .a = true, .b = true, .c = true, .d = true });
+    var scope = Scope{ .inner = undefined };
+    nosuspend waker.wait(&lock, .{ .a = true, .b = true, .c = true, .d = true }, &scope, &scope.inner);
     testing.expect(mem.allEqual(bool, &waker.ready, false));
 
     var A_done = false;
@@ -299,19 +307,19 @@ test "PackedWaker.wake() / PackedWaker.wait()" {
     var C = async Test.do(&waker, &lock, .{ .a = true, .b = true, .d = true }, &C_done);
     var D = async Test.do(&waker, &lock, .{ .d = true }, &D_done);
 
-    resume waker.wake(&lock, .{ .b = true }).?;
+    resume waker.wake(&lock, .{ .b = true }).?.inner;
     nosuspend await B;
     testing.expect(B_done);
 
-    resume waker.wake(&lock, .{ .b = true }).?;
+    resume waker.wake(&lock, .{ .b = true }).?.inner;
     nosuspend await C;
     testing.expect(C_done);
 
-    resume waker.wake(&lock, .{ .a = true }).?;
+    resume waker.wake(&lock, .{ .a = true }).?.inner;
     nosuspend await A;
     testing.expect(A_done);
 
-    resume waker.wake(&lock, .{ .d = true }).?;
+    resume waker.wake(&lock, .{ .d = true }).?.inner;
     nosuspend await D;
     testing.expect(D_done);
 }
