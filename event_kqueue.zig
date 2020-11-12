@@ -2,7 +2,6 @@ const std = @import("std");
 const pike = @import("pike.zig");
 
 const os = std.os;
-const mem = std.mem;
 
 usingnamespace @import("waker.zig");
 

@@ -72,10 +72,13 @@ pub const Notifier = struct {
     pub fn poll(self: *const Self, timeout: i32) !void {
         var events: [128]windows.OVERLAPPED_ENTRY = undefined;
 
-        const num_events = try windows.GetQueuedCompletionStatusEx(self.handle, &events, @intCast(windows.DWORD, timeout), false);
+        const num_events = windows.GetQueuedCompletionStatusEx(self.handle, &events, @intCast(windows.DWORD, timeout), false) catch |err| switch (err) {
+            error.Timeout => return,
+            else => return err,
+        };
 
         for (events[0..num_events]) |event| {
-            resume @fieldParentPtr(Overlapped, "inner", event.lpOverlapped).frame;
+            resume @fieldParentPtr(Overlapped, "inner", event.lpOverlapped orelse continue).frame;
         }
     }
 };

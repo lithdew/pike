@@ -21,7 +21,7 @@ pub const HANDLER_ROUTINE = fn (dwCtrlType: DWORD) callconv(.C) BOOL;
 
 pub const OVERLAPPED_ENTRY = extern struct {
     lpCompletionKey: ULONG_PTR,
-    lpOverlapped: LPOVERLAPPED,
+    lpOverlapped: ?LPOVERLAPPED,
     Internal: ULONG_PTR,
     dwNumberOfBytesTransferred: DWORD,
 };
