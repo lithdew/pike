@@ -19,10 +19,10 @@ pub const WakeOptions = packed struct {
     write_ready: bool = false,
 };
 
-// Export 'Notifier' and 'Handle'.
-
 const has_epoll = @hasDecl(os.system, "epoll_create1") and @hasDecl(os.system, "epoll_ctl") and @hasDecl(os, "epoll_event");
 const has_kqueue = @hasDecl(os.system, "kqueue") and @hasDecl(os.system, "kevent") and @hasDecl(os, "Kevent");
+
+// Export 'Notifier' and 'Handle'.
 
 pub usingnamespace if (@hasDecl(root, "notifier"))
     root.notifier
@@ -52,3 +52,10 @@ else if (builtin.os.tag == .windows)
     @import("signal_windows.zig")
 else
     @compileError("pike: unable to figure out a 'Signal' implementation to use for the build target");
+
+// Export 'Event'.
+
+pub usingnamespace if (has_epoll)
+    @import("event_epoll.zig")
+else
+    @compileError("pike: unable to figure out a 'Event' implementation to use for the build target");

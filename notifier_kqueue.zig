@@ -74,7 +74,7 @@ pub const Notifier = struct {
     }
 
     pub fn poll(self: *const Self, timeout: i32) !void {
-        var events: [1024]os.Kevent = undefined;
+        var events: [128]os.Kevent = undefined;
 
         const timeout_spec = os.timespec{
             .tv_sec = @divTrunc(timeout, time.ms_per_s),

@@ -70,7 +70,7 @@ pub const Notifier = struct {
     }
 
     pub fn poll(self: *const Self, timeout: i32) !void {
-        var events: [1024]windows.OVERLAPPED_ENTRY = undefined;
+        var events: [128]windows.OVERLAPPED_ENTRY = undefined;
 
         const num_events = try windows.GetQueuedCompletionStatusEx(self.handle, &events, @intCast(windows.DWORD, timeout), false);
 
