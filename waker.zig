@@ -208,7 +208,7 @@ pub fn PackedWaker(comptime Frame: type, comptime Set: type) type {
         ready: [set_count]bool = [_]bool{false} ** set_count,
         heads: [set_count]?*FrameNode = [_]?*FrameNode{null} ** set_count,
 
-        pub fn wait(self: *Self, lock: *std.Mutex, set: Set, data: Frame) callconv(.Async) void {
+        pub fn wait(self: *Self, lock: *std.Mutex, set: Set, data: Frame, frame: *anyframe) callconv(.Async) void {
             const held = lock.acquire();
 
             var any_ready = false;
@@ -225,6 +225,7 @@ pub fn PackedWaker(comptime Frame: type, comptime Set: type) type {
                 held.release();
             } else {
                 suspend {
+                    frame.* = @frame();
                     FrameList.append(&self.heads, set, &FrameNode{ .data = data });
                     held.release();
                 }

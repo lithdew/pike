@@ -97,14 +97,14 @@ pub const Signal = struct {
 
     pub fn wait(self: *const Self) callconv(.Async) !void {
         if (self.port == windows.INVALID_HANDLE_VALUE) return error.NotRegistered;
-        
+
         defer if (waker.next(&lock, self.current_signal)) |data| resume data.overlapped.frame;
 
         var data = Data{
             .port = self.port,
-            .overlapped = pike.Overlapped.init(@frame()),
+            .overlapped = pike.Overlapped.init(undefined),
         };
 
-        waker.wait(&lock, self.current_signal, &data);
+        waker.wait(&lock, self.current_signal, &data, &data.overlapped.frame);
     }
 };
