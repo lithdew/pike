@@ -5,9 +5,14 @@ const builtin = std.builtin;
 
 usingnamespace std.os;
 
-pub const SHUT_RD = 0;
-pub const SHUT_WR = 1;
-pub const SHUT_RDWR = 2;
+pub usingnamespace if (!@hasDecl(std.os, "SHUT_RD") and !@hasDecl(std.os, "SHUT_WR") and !@hasDecl(std.os, "SHUT_RDWR"))
+    struct {
+        pub const SHUT_RD = 0;
+        pub const SHUT_WR = 1;
+        pub const SHUT_RDWR = 2;
+    }
+else
+    struct {};
 
 pub const LINGER = extern struct {
     l_onoff: c_int, // Whether or not a socket should remain open to send queued dataa after closesocket() is called.
