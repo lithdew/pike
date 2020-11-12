@@ -111,6 +111,7 @@ fn runBenchmarkClient(notifier: *const pike.Notifier, address: net.Address, stop
 
     var buf: [65536]u8 = undefined;
     while (true) {
-        _ = try socket.recv(&buf, 0);
+        const n = try socket.recv(&buf, 0);
+        if (n == 0) return;
     }
 }

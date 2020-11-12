@@ -36,8 +36,15 @@ fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
     std.debug.print("Connected to: {}\n", .{address});
 
     var buf: [1024]u8 = undefined;
-    std.debug.print("Got: {}", .{buf[0..try socket.read(&buf)]});
-    std.debug.print("Got: {}", .{buf[0..try socket.recv(&buf, 0)]});
+    var n: usize = undefined;
+
+    n = try socket.read(&buf);
+    if (n == 0) return;
+    std.debug.print("Got: {}", .{buf[0..n]});
+
+    n = try socket.read(&buf);
+    if (n == 0) return;
+    std.debug.print("Got: {}", .{buf[0..n]});
 
     _ = try socket.write("Hello world!\n");
     _ = try socket.send("Hello world!\n", 0);

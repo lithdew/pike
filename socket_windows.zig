@@ -210,17 +210,28 @@ pub const Socket = struct {
     }
 
     pub fn read(self: *Self, buf: []u8) callconv(.Async) !usize {
-        const overlapped = try self.call(windows.ReadFile_, .{
+        const overlapped = self.call(windows.ReadFile_, .{
             self.handle.inner, buf, OVERLAPPED_PARAM,
-        }, .{});
+        }, .{}) catch |err| switch (err) {
+            error.EndOfFile => return 0,
+            else => return err,
+        };
 
         return overlapped.inner.InternalHigh;
     }
 
     pub fn recv(self: *Self, buf: []u8, flags: u32) callconv(.Async) !usize {
-        const overlapped = try self.call(windows.WSARecv, .{
+        const overlapped = self.call(windows.WSARecv, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner), buf, flags, OVERLAPPED_PARAM,
-        }, .{});
+        }, .{}) catch |err| switch (err) {
+            error.ConnectionAborted,
+            error.ConnectionResetByPeer,
+            error.ConnectionClosedByPeer,
+            error.NetworkSubsystemFailed,
+            error.NetworkReset,
+            => return 0,
+            else => return err,
+        };
 
         return overlapped.inner.InternalHigh;
     }
@@ -229,14 +240,22 @@ pub const Socket = struct {
         var src_addr: ws2_32.sockaddr = undefined;
         var src_addr_len: ws2_32.socklen_t = undefined;
 
-        const overlapped = try self.call(windows.WSARecvFrom, .{
+        const overlapped = self.call(windows.WSARecvFrom, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             buf,
             flags,
             @as(?*ws2_32.sockaddr, if (address != null) &src_addr else null),
             @as(?*ws2_32.socklen_t, if (address != null) &src_addr_len else null),
             OVERLAPPED_PARAM,
-        }, .{});
+        }, .{}) catch |err| switch (err) {
+            error.ConnectionAborted,
+            error.ConnectionResetByPeer,
+            error.ConnectionClosedByPeer,
+            error.NetworkSubsystemFailed,
+            error.NetworkReset,
+            => return 0,
+            else => return err,
+        };
 
         if (address) |a| {
             a.* = net.Address{ .any = src_addr };
@@ -246,30 +265,48 @@ pub const Socket = struct {
     }
 
     pub fn write(self: *Self, buf: []const u8) callconv(.Async) !usize {
-        const overlapped = try self.call(windows.WriteFile_, .{
+        const overlapped = self.call(windows.WriteFile_, .{
             self.handle.inner, buf, OVERLAPPED_PARAM,
-        }, .{});
+        }, .{}) catch |err| switch (err) {
+            error.EndOfFile => return 0,
+            else => return err,
+        };
 
         return overlapped.inner.InternalHigh;
     }
 
     pub fn send(self: *Self, buf: []const u8, flags: u32) callconv(.Async) !usize {
-        const overlapped = try self.call(windows.WSASend, .{
+        const overlapped = self.call(windows.WSASend, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner), buf, flags, OVERLAPPED_PARAM,
-        }, .{});
+        }, .{}) catch |err| switch (err) {
+            error.ConnectionAborted,
+            error.ConnectionResetByPeer,
+            error.NetworkSubsystemFailed,
+            error.NetworkReset,
+            => return 0,
+            else => return err,
+        };
 
         return overlapped.inner.InternalHigh;
     }
 
     pub fn sendTo(self: *Self, buf: []const u8, flags: u32, address: ?net.Address) callconv(.Async) !usize {
-        const overlapped = try self.call(windows.WSASendTo, .{
+        const overlapped = self.call(windows.WSASendTo, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             buf,
             flags,
             @as(?*const ws2_32.sockaddr, if (address) |a| &a.any else null),
             if (address) |a| a.getOsSockLen() else 0,
             OVERLAPPED_PARAM,
-        }, .{});
+        }, .{}) catch |err| switch (err) {
+            error.ConnectionAborted,
+            error.ConnectionResetByPeer,
+            error.ConnectionClosedByPeer,
+            error.NetworkSubsystemFailed,
+            error.NetworkReset,
+            => return 0,
+            else => return err,
+        };
 
         return overlapped.inner.InternalHigh;
     }
