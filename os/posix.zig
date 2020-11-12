@@ -30,6 +30,41 @@ pub fn shutdown(sock: socket_t, how: c_int) !void {
     };
 }
 
+pub fn sendto_(
+    /// The file descriptor of the sending socket.
+    sockfd: socket_t,
+    /// Message to send.
+    buf: []const u8,
+    flags: u32,
+    dest_addr: ?*const sockaddr,
+    addrlen: socklen_t,
+) !usize {
+    while (true) {
+        const rc = system.sendto(sockfd, buf.ptr, buf.len, flags, dest_addr, addrlen);
+        switch (errno(rc)) {
+            0 => return @intCast(usize, rc),
+            EACCES => return error.AccessDenied,
+            EAGAIN, EPROTOTYPE => return error.WouldBlock,
+            EALREADY => return error.FastOpenAlreadyInProgress,
+            EBADF => unreachable, // always a race condition
+            ECONNRESET => return error.ConnectionResetByPeer,
+            EDESTADDRREQ => unreachable, // The socket is not connection-mode, and no peer address is set.
+            EFAULT => unreachable, // An invalid user space address was specified for an argument.
+            EINTR => continue,
+            EINVAL => unreachable, // Invalid argument passed.
+            EISCONN => unreachable, // connection-mode socket was connected already but a recipient was specified
+            EMSGSIZE => return error.MessageTooBig,
+            ENOBUFS => return error.SystemResources,
+            ENOMEM => return error.SystemResources,
+            ENOTCONN => unreachable, // The socket is not connected, and no target has been given.
+            ENOTSOCK => unreachable, // The file descriptor sockfd does not refer to a socket.
+            EOPNOTSUPP => unreachable, // Some bit in the flags argument is inappropriate for the socket type.
+            EPIPE => return error.BrokenPipe,
+            else => |err| return unexpectedErrno(err),
+        }
+    }
+}
+
 pub fn read_(fd: fd_t, buf: []u8) !usize {
     const max_count = switch (std.Target.current.os.tag) {
         .linux => 0x7ffff000,

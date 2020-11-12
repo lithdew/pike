@@ -173,11 +173,14 @@ pub const Socket = struct {
     }
 
     pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {
-        return self.call(
+        self.call(
             posix.connect_,
             .{ self.handle.inner, &address.any, address.getOsSockLen() },
             .{ .write = true },
-        );
+        ) catch |err| switch (err) {
+            error.AlreadyConnected => {},
+            else => return err,
+        };
     }
 
     pub fn read(self: *Self, buf: []u8) callconv(.Async) !usize {
@@ -216,7 +219,7 @@ pub const Socket = struct {
     }
 
     pub fn sendTo(self: *Self, buf: []const u8, flags: u32, address: ?net.Address) callconv(.Async) !usize {
-        return self.call(os.sendto, .{
+        return self.call(posix.sendto_, .{
             self.handle.inner,
             buf,
             flags,
