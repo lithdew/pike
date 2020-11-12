@@ -18,7 +18,10 @@ A minimal cross-platform high-performance async I/O library written in [Zig](htt
     - [x] `read`, `recv`, `recvFrom`
     - [x] `write`, `send`, `sendTo`
     - [x] get/set socket options
-- [ ] Async signal support
+- [x] Async signal support
+    - [x] signalfd (linux)
+    - [x] kqueue EVFILT_SIGNAL (darwin)
+    - [x] SetConsoleCtrlHandler (windows)
 
 ## Design
 
