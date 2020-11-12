@@ -97,7 +97,7 @@ pub const Socket = struct {
         windows.closesocket(@ptrCast(ws2_32.SOCKET, self.handle.inner)) catch {};
     }
 
-    fn call(self: *Self, comptime function: anytype, raw_args: anytype, comptime opts: pike.CallOptions) callconv(.Async) !pike.Overlapped {
+    inline fn call(self: *Self, comptime function: anytype, raw_args: anytype, comptime opts: pike.CallOptions) callconv(.Async) !pike.Overlapped {
         var overlapped = pike.Overlapped.init(@frame());
         var args = raw_args;
 
