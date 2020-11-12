@@ -82,6 +82,7 @@ pub const Socket = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        self.shutdown(os.SHUT_RDWR) catch {};
         os.close(self.handle.inner);
 
         while (self.readers.next(&self.lock)) |frame| resume frame;
@@ -114,6 +115,10 @@ pub const Socket = struct {
 
             return result;
         }
+    }
+
+    pub fn shutdown(self: *const Self, how: c_int) !void {
+        try posix.shutdown(self.handle.inner, how);
     }
 
     pub fn get(self: *const Self, comptime opt: SocketOptionType) !UnionValueType(SocketOption, opt) {
@@ -172,14 +177,11 @@ pub const Socket = struct {
             posix.connect_,
             .{ self.handle.inner, &address.any, address.getOsSockLen() },
             .{ .write = true },
-        ) catch |err| switch (err) {
-            error.AlreadyConnected => {},
-            else => err,
-        };
+        );
     }
 
     pub fn read(self: *Self, buf: []u8) callconv(.Async) !usize {
-        return self.call(os.read, .{ self.handle.inner, buf }, .{ .read = true });
+        return self.call(posix.read_, .{ self.handle.inner, buf }, .{ .read = true });
     }
 
     pub fn recv(self: *Self, buf: []u8, flags: u32) callconv(.Async) !usize {

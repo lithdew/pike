@@ -281,7 +281,7 @@ pub fn recv(sock: ws2_32.SOCKET, buf: []u8) !usize {
             .WSAENOTCONN => error.SocketNotConnected,
             .WSAEINTR => error.Cancelled,
             .WSAEINPROGRESS, .WSAEWOULDBLOCK => error.WouldBlock,
-            .WSAENETRESET => error.ConnectionResetted,
+            .WSAENETRESET => error.NetworkReset,
             .WSAENOTSOCK => error.NotASocket,
             .WSAEOPNOTSUPP => error.FlagNotSupported,
             .WSAESHUTDOWN => error.EndOfFile,
@@ -312,6 +312,22 @@ pub fn getsockopt(comptime T: type, handle: ws2_32.SOCKET, level: c_int, opt: c_
     }
 
     return val;
+}
+
+pub fn shutdown(socket: ws2_32.SOCKET, how: c_int) !void {
+    const result = @import("windows/ws2_32.zig").shutdown(socket, how);
+    if (result == ws2_32.SOCKET_ERROR) {
+        return switch (ws2_32.WSAGetLastError()) {
+            .WSAECONNABORTED => error.ConnectionAborted,
+            .WSAECONNRESET => error.ConnectionResetByPeer,
+            .WSAEINPROGRESS => error.WouldBlock,
+            .WSAEINVAL => error.BadArgument,
+            .WSAENETDOWN => error.NetworkSubsystemFailed,
+            .WSAENOTCONN => error.SocketNotConnected,
+            .WSAENOTSOCK => error.FileDescriptorNotASocket,
+            else => |err| unexpectedWSAError(err),
+        };
+    }
 }
 
 pub fn getsockoptError(handle: ws2_32.SOCKET) !void {
@@ -387,7 +403,7 @@ pub fn WSASendTo(sock: ws2_32.SOCKET, buf: []const u8, flags: DWORD, addr: ?*con
             .WSAEINVAL => error.SocketNotBound,
             .WSAEMSGSIZE => error.MessageTooLarge,
             .WSAENETDOWN => error.NetworkSubsystemFailed,
-            .WSAENETRESET => error.ConnectionResetted,
+            .WSAENETRESET => error.NetworkReset,
             .WSAENOBUFS => error.BufferDeadlock,
             .WSAENOTCONN => error.SocketNotConnected,
             .WSAENOTSOCK => error.FileDescriptorNotASocket,
@@ -418,7 +434,7 @@ pub fn WSASend(sock: ws2_32.SOCKET, buf: []const u8, flags: DWORD, overlapped: *
             .WSAEINVAL => error.SocketNotBound,
             .WSAEMSGSIZE => error.MessageTooLarge,
             .WSAENETDOWN => error.NetworkSubsystemFailed,
-            .WSAENETRESET => error.ConnectionResetted,
+            .WSAENETRESET => error.NetworkReset,
             .WSAENOBUFS => error.BufferDeadlock,
             .WSAENOTCONN => error.SocketNotConnected,
             .WSAENOTSOCK => error.FileDescriptorNotASocket,
@@ -451,7 +467,7 @@ pub fn WSARecv(sock: ws2_32.SOCKET, buf: []u8, flags: DWORD, overlapped: *OVERLA
             .WSAEINVAL => error.SocketNotBound,
             .WSAEMSGSIZE => error.MessageTooLarge,
             .WSAENETDOWN => error.NetworkSubsystemFailed,
-            .WSAENETRESET => error.ConnectionResetted,
+            .WSAENETRESET => error.NetworkReset,
             .WSAENOTCONN => error.SocketNotConnected,
             .WSAENOTSOCK => error.FileDescriptorNotASocket,
             .WSAEOPNOTSUPP => error.OperationNotSupported,
@@ -483,7 +499,7 @@ pub fn WSARecvFrom(sock: ws2_32.SOCKET, buf: []u8, flags: DWORD, addr: ?*ws2_32.
             .WSAEINVAL => error.SocketNotBound,
             .WSAEMSGSIZE => error.MessageTooLarge,
             .WSAENETDOWN => error.NetworkSubsystemFailed,
-            .WSAENETRESET => error.ConnectionResetted,
+            .WSAENETRESET => error.NetworkReset,
             .WSAENOTCONN => error.SocketNotConnected,
             .WSAENOTSOCK => error.FileDescriptorNotASocket,
             .WSAEOPNOTSUPP => error.OperationNotSupported,

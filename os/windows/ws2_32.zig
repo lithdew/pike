@@ -19,6 +19,10 @@ pub const SIO_GET_EXTENSION_FUNCTION_POINTER = IOC_OUT | IOC_IN | IOC_WS2 | 6;
 pub const SO_UPDATE_CONNECT_CONTEXT = 0x7010;
 pub const SO_UPDATE_ACCEPT_CONTEXT = 0x700B;
 
+pub const SD_RECEIVE = 0;
+pub const SD_SEND = 1;
+pub const SD_BOTH = 2;
+
 pub const LINGER = extern struct {
     l_onoff: windows.USHORT, // Whether or not a socket should remain open to send queued dataa after closesocket() is called.
     l_linger: windows.USHORT, // Number of seconds on how long a socket should remain open after closesocket() is called.
@@ -50,6 +54,11 @@ pub extern "ws2_32" fn getsockopt(
     optname: c_int,
     optval: [*]u8,
     optlen: *c_int,
+) callconv(.Stdcall) c_int;
+
+pub extern "ws2_32" fn shutdown(
+    s: SOCKET,
+    how: c_int,
 ) callconv(.Stdcall) c_int;
 
 pub extern "ws2_32" fn recv(

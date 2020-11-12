@@ -94,6 +94,7 @@ pub const Socket = struct {
     }
 
     pub fn deinit(self: *const Self) void {
+        self.shutdown(ws2_32.SD_BOTH) catch {};
         windows.closesocket(@ptrCast(ws2_32.SOCKET, self.handle.inner)) catch {};
     }
 
@@ -120,6 +121,10 @@ pub const Socket = struct {
         };
 
         return overlapped;
+    }
+
+    pub fn shutdown(self: *const Self, how: c_int) !void {
+        try windows.shutdown(@ptrCast(ws2_32.SOCKET, self.handle.inner), how);
     }
 
     pub fn get(self: *const Self, comptime opt: SocketOptionType) !UnionValueType(SocketOption, opt) {
