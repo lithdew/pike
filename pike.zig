@@ -48,5 +48,7 @@ pub usingnamespace if (builtin.os.tag == .linux)
     @import("signal_linux.zig")
 else if (has_kqueue)
     @import("signal_darwin.zig")
+else if (builtin.os.tag == .windows)
+    @import("signal_windows.zig")
 else
     @compileError("pike: unable to figure out a 'Signal' implementation to use for the build target");

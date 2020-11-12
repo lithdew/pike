@@ -5,6 +5,11 @@ const kernel32 = windows.kernel32;
 
 pub usingnamespace kernel32;
 
+pub extern "kernel32" fn SetConsoleCtrlHandler(
+    HandlerRoutine: ?windows.HANDLER_ROUTINE,
+    Add: windows.BOOL,
+) callconv(.Stdcall) windows.BOOL;
+
 pub extern "kernel32" fn SetFileCompletionNotificationModes(
     FileHandle: windows.HANDLE,
     Flags: windows.UCHAR,

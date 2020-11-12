@@ -11,6 +11,14 @@ pub usingnamespace windows;
 pub const FILE_SKIP_COMPLETION_PORT_ON_SUCCESS = 0x1;
 pub const FILE_SKIP_SET_EVENT_ON_HANDLE = 0x2;
 
+pub const CTRL_C_EVENT: windows.DWORD = 0;
+pub const CTRL_BREAK_EVENT: windows.DWORD = 1;
+pub const CTRL_CLOSE_EVENT: windows.DWORD = 2;
+pub const CTRL_LOGOFF_EVENT: windows.DWORD = 5;
+pub const CTRL_SHUTDOWN_EVENT: windows.DWORD = 6;
+
+pub const HANDLER_ROUTINE = fn (dwCtrlType: DWORD) callconv(.C) BOOL;
+
 pub const OVERLAPPED_ENTRY = extern struct {
     lpCompletionKey: ULONG_PTR,
     lpOverlapped: LPOVERLAPPED,
@@ -46,6 +54,19 @@ pub fn loadWinsockExtensionFunction(comptime T: type, sock: ws2_32.SOCKET, guid:
     }
 
     return function;
+}
+
+pub fn SetConsoleCtrlHandler(handler_routine: ?HANDLER_ROUTINE, add: bool) !void {
+    const success = @import("windows/kernel32.zig").SetConsoleCtrlHandler(
+        handler_routine,
+        if (add) windows.TRUE else windows.FALSE,
+    );
+
+    if (success == windows.FALSE) {
+        return switch (windows.kernel32.GetLastError()) {
+            else => |err| windows.unexpectedError(err),
+        };
+    }
 }
 
 pub fn SetFileCompletionNotificationModes(handle: HANDLE, flags: UCHAR) !void {

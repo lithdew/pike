@@ -59,6 +59,8 @@ pub const Notifier = struct {
     }
 
     pub fn register(self: *const Self, handle: *const Handle, comptime opts: pike.PollOptions) !void {
+        if (handle.inner == windows.INVALID_HANDLE_VALUE) return;
+
         const port = try windows.CreateIoCompletionPort(handle.inner, self.handle, 0, 0);
 
         try windows.SetFileCompletionNotificationModes(

@@ -37,6 +37,8 @@ pub const Notifier = struct {
     }
 
     pub fn register(self: *const Self, handle: *const Handle, comptime opts: pike.PollOptions) !void {
+        if (handle.inner == -1) return;
+
         var events = os.EPOLLET;
         if (opts.read) events |= os.EPOLLIN;
         if (opts.write) events |= os.EPOLLOUT;
