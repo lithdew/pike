@@ -54,6 +54,8 @@ pub const Notifier = struct {
 
         const num_events = os.epoll_wait(self.handle, &events, timeout);
         for (events[0..num_events]) |e| {
+            if (e.data.ptr == 0) continue;
+
             const handle = @intToPtr(*Handle, e.data.ptr);
 
             const read_ready = (e.events & os.EPOLLERR != 0 or e.events & os.EPOLLHUP != 0) or e.events & os.EPOLLIN != 0;
