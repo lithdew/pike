@@ -24,16 +24,16 @@ const has_kqueue = @hasDecl(os.system, "kqueue") and @hasDecl(os.system, "kevent
 
 // Export asynchronous frame dispatcher and user scope (context).
 
-pub const scope = if (@hasDecl(root, "dispatch_data"))
-    root.dispatch_data
+pub const scope = if (@hasDecl(root, "dispatch_scope"))
+    root.dispatch_scope
 else
     @as(?usize, null);
 
-pub const dispatch: fn (data: @TypeOf(scope), frame: anyframe) void = if (@hasDecl(root, "dispatch"))
+pub const dispatch: fn (@TypeOf(scope), anyframe) void = if (@hasDecl(root, "dispatch"))
     root.dispatch
 else
     struct {
-        inline fn default(data: @TypeOf(scope), frame: anyframe) void {
+        inline fn default(_: @TypeOf(scope), frame: anyframe) void {
             resume frame;
         }
     }.default;
