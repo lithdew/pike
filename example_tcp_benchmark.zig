@@ -48,8 +48,6 @@ pub fn main() !void {
         break :blk try net.Address.parseIp(addr_host, addr_port);
     };
 
-    errdefer |err| std.debug.print("GOT SOME ERROR: {}\n", .{@errorName(err)});
-
     try pike.init();
     defer pike.deinit();
 
