@@ -87,7 +87,8 @@ pub const Socket = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.shutdown(posix.SHUT_RDWR) catch {};
+        self.shutdown(posix.SHUT_RDWR) catch |_| return;
+
         os.close(self.handle.inner);
 
         while (self.readers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
@@ -167,7 +168,7 @@ pub const Socket = struct {
         var addr: os.sockaddr = undefined;
         var addr_len: os.socklen_t = @sizeOf(@TypeOf(addr));
 
-        const handle = try self.call(os.accept, .{
+        const handle = try self.call(posix.accept_, .{
             self.handle.inner,
             &addr,
             &addr_len,
@@ -192,7 +193,12 @@ pub const Socket = struct {
     }
 
     pub fn read(self: *Self, buf: []u8) callconv(.Async) !usize {
-        return self.call(posix.read_, .{ self.handle.inner, buf }, .{ .read = true });
+        const num_bytes = self.call(posix.read_, .{ self.handle.inner, buf }, .{ .read = true }) catch |err| switch (err) {
+            error.NotOpenForReading => return 0,
+            else => return err,
+        };
+
+        return num_bytes;
     }
 
     pub fn recv(self: *Self, buf: []u8, flags: u32) callconv(.Async) !usize {

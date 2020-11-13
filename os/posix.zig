@@ -126,6 +126,109 @@ pub fn connect_(sock: socket_t, sock_addr: *const sockaddr, len: socklen_t) !voi
     }
 }
 
+pub fn accept_(sock: socket_t, addr: ?*sockaddr, addr_size: ?*socklen_t, flags: u32) !socket_t {
+    const have_accept4 = comptime !(std.Target.current.isDarwin() or builtin.os.tag == .windows);
+
+    const accepted_sock = while (true) {
+        const rc = if (have_accept4)
+            system.accept4(sock, addr, addr_size, flags)
+        else if (builtin.os.tag == .windows)
+            windows.accept(sock, addr, addr_size)
+        else
+            system.accept(sock, addr, addr_size);
+
+        if (builtin.os.tag == .windows) {
+            if (rc == windows.ws2_32.INVALID_SOCKET) {
+                switch (windows.ws2_32.WSAGetLastError()) {
+                    .WSANOTINITIALISED => unreachable, // not initialized WSA
+                    .WSAECONNRESET => return error.ConnectionResetByPeer,
+                    .WSAEFAULT => unreachable,
+                    .WSAEINVAL => return error.SocketNotListening,
+                    .WSAEMFILE => return error.ProcessFdQuotaExceeded,
+                    .WSAENETDOWN => return error.NetworkSubsystemFailed,
+                    .WSAENOBUFS => return error.FileDescriptorNotASocket,
+                    .WSAEOPNOTSUPP => return error.OperationNotSupported,
+                    .WSAEWOULDBLOCK => return error.WouldBlock,
+                    else => |err| return windows.unexpectedWSAError(err),
+                }
+            } else {
+                break rc;
+            }
+        } else {
+            switch (errno(rc)) {
+                0 => {
+                    break @intCast(socket_t, rc);
+                },
+                EINTR => continue,
+                EAGAIN => return error.WouldBlock,
+                ECONNABORTED => return error.ConnectionAborted,
+                EFAULT => unreachable,
+                EINVAL, EBADF => return error.SocketNotListening,
+                ENOTSOCK => return error.NotASocket,
+                EMFILE => return error.ProcessFdQuotaExceeded,
+                ENFILE => return error.SystemFdQuotaExceeded,
+                ENOBUFS => return error.SystemResources,
+                ENOMEM => return error.SystemResources,
+                EOPNOTSUPP => unreachable,
+                EPROTO => return error.ProtocolFailure,
+                EPERM => return error.BlockedByFirewall,
+                else => |err| return unexpectedErrno(err),
+            }
+        }
+    } else unreachable;
+
+    if (!have_accept4) {
+        try setSockFlags(accepted_sock, flags);
+    }
+    return accepted_sock;
+}
+
+fn setSockFlags(sock: socket_t, flags: u32) !void {
+    if ((flags & SOCK_CLOEXEC) != 0) {
+        if (builtin.os.tag == .windows) {
+            // TODO: Find out if this is supported for sockets
+        } else {
+            var fd_flags = fcntl(sock, F_GETFD, 0) catch |err| switch (err) {
+                error.FileBusy => unreachable,
+                error.Locked => unreachable,
+                else => |e| return e,
+            };
+            fd_flags |= FD_CLOEXEC;
+            _ = fcntl(sock, F_SETFD, fd_flags) catch |err| switch (err) {
+                error.FileBusy => unreachable,
+                error.Locked => unreachable,
+                else => |e| return e,
+            };
+        }
+    }
+    if ((flags & SOCK_NONBLOCK) != 0) {
+        if (builtin.os.tag == .windows) {
+            var mode: c_ulong = 1;
+            if (windows.ws2_32.ioctlsocket(sock, windows.ws2_32.FIONBIO, &mode) == windows.ws2_32.SOCKET_ERROR) {
+                switch (windows.ws2_32.WSAGetLastError()) {
+                    .WSANOTINITIALISED => unreachable,
+                    .WSAENETDOWN => return error.NetworkSubsystemFailed,
+                    .WSAENOTSOCK => return error.FileDescriptorNotASocket,
+                    // TODO: handle more errors
+                    else => |err| return windows.unexpectedWSAError(err),
+                }
+            }
+        } else {
+            var fl_flags = fcntl(sock, F_GETFL, 0) catch |err| switch (err) {
+                error.FileBusy => unreachable,
+                error.Locked => unreachable,
+                else => |e| return e,
+            };
+            fl_flags |= O_NONBLOCK;
+            _ = fcntl(sock, F_SETFL, fl_flags) catch |err| switch (err) {
+                error.FileBusy => unreachable,
+                error.Locked => unreachable,
+                else => |e| return e,
+            };
+        }
+    }
+}
+
 pub fn getsockopt(comptime T: type, handle: socket_t, level: c_int, opt: c_int) !T {
     var val: T = undefined;
     var val_len: c_int = @sizeOf(T);
