@@ -45,15 +45,15 @@ pub fn runServer(notifier: *const pike.Notifier, server: *pike.Socket) !void {
 
     defer {
         for (clients.items) |*client| {
-            defer {
-                client.conn.socket.deinit();
-                await client.frame catch |err| {
-                    log.err("Peer {} reported an error: {}", .{ client.conn.address, @errorName(err) });
-                };
-                allocator.destroy(client);
-            }
-
             _ = client.conn.socket.write("Server is closing! Good bye...\n") catch {};
+
+            client.conn.socket.deinit();
+
+            await client.frame catch |err| {
+                log.err("Peer {} reported an error: {}", .{ client.conn.address, @errorName(err) });
+            };
+
+            allocator.destroy(client);
         }
     }
 
