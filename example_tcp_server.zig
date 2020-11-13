@@ -35,10 +35,7 @@ pub fn runServer(notifier: *const pike.Notifier, server: *pike.Socket) !void {
     var gpa = heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
-    var arena = heap.ArenaAllocator.init(&gpa.allocator);
-    defer arena.deinit();
-
-    const allocator = &arena.allocator;
+    const allocator = &gpa.allocator;
 
     var clients = try std.ArrayListUnmanaged(Client).initCapacity(allocator, 128);
     defer clients.deinit(allocator);
