@@ -63,6 +63,7 @@ pub fn runServer(notifier: *const pike.Notifier, server: *pike.Socket) !void {
         errdefer conn.socket.deinit();
 
         const client = try clients.addOne(allocator);
+        errdefer clients.items.len -= 1;
 
         client.conn = conn;
         client.frame = async client.run();
