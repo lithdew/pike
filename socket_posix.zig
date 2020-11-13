@@ -91,8 +91,20 @@ pub const Socket = struct {
 
         os.close(self.handle.inner);
 
-        while (self.readers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
-        while (self.writers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
+        var buf: [128]anyframe = undefined;
+        var len: usize = 0;
+
+        while (self.readers.wake(&self.lock)) |frame| : (len += 1) {
+            if (len == @sizeOf(@TypeOf(buf))) break;
+            buf[len] = frame;
+        }
+
+        while (self.writers.wake(&self.lock)) |frame| : (len += 1) {
+            if (len == @sizeOf(@TypeOf(buf))) break;
+            buf[len] = frame;
+        }
+
+        for (buf[0..len]) |frame| pike.dispatch(pike.scope, frame);
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
@@ -102,8 +114,11 @@ pub const Socket = struct {
     inline fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
 
-        if (opts.read_ready) if (self.readers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
-        if (opts.write_ready) if (self.writers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
+        const read_frame = if (opts.read_ready) self.readers.wake(&self.lock) else null;
+        const write_frame = if (opts.write_ready) self.writers.wake(&self.lock) else null;
+
+        if (read_frame) |frame| pike.dispatch(pike.scope, frame);
+        if (write_frame) |frame| pike.dispatch(pike.scope, frame);
     }
 
     fn call(self: *Self, comptime function: anytype, args: anytype, comptime opts: pike.CallOptions) callconv(.Async) @typeInfo(@TypeOf(function)).Fn.return_type.? {

@@ -7,75 +7,127 @@ const net = std.net;
 const log = std.log;
 const heap = std.heap;
 
+pub const ClientQueue = std.TailQueue(*Client);
+
 pub const Client = struct {
-    conn: pike.Connection,
-    frame: @Frame(run),
+    address: net.Address,
+    socket: pike.Socket,
+    dead: bool = false,
 
-    pub fn run(self: *Client) !void {
-        defer log.info("Peer {} has disconnected.", .{self.conn.address});
+    fn read(self: *Client, buf: []u8) !usize {
+        return self.socket.read(buf);
+    }
 
-        _ = try self.conn.socket.write("Hello from the server!\n");
-
-        var buf: [1024]u8 = undefined;
-        while (true) {
-            const num_bytes = try self.conn.socket.read(&buf);
-            if (num_bytes == 0) return;
-
-            const message = mem.trim(u8, buf[0..num_bytes], " \t\r\n");
-            log.info("Peer {} said: {}", .{ self.conn.address, message });
+    pub fn writeAll(self: *Client, buf: []const u8) !void {
+        var index: usize = 0;
+        while (index < buf.len) {
+            index += try self.socket.write(buf);
         }
     }
 };
 
-pub fn runServer(notifier: *const pike.Notifier, server: *pike.Socket) !void {
-    defer log.debug("TCP server has shut down.", .{});
+pub const Server = struct {
+    frame: @Frame(Server.run),
+    allocator: *mem.Allocator,
 
-    var gpa = heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
+    socket: pike.Socket,
+    clients: ClientQueue,
 
-    const allocator = &gpa.allocator;
+    pub fn init(allocator: *mem.Allocator) !Server {
+        var socket = try pike.Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0);
+        errdefer socket.deinit();
 
-    var clients = try std.ArrayListUnmanaged(Client).initCapacity(allocator, 128);
-    defer clients.deinit(allocator);
+        try socket.set(.reuse_address, true);
 
-    defer {
-        for (clients.items) |*client| {
-            _ = client.conn.socket.write("Server is closing! Good bye...\n") catch {};
+        return Server{
+            .frame = undefined,
+            .allocator = allocator,
 
-            client.conn.socket.deinit();
+            .socket = socket,
+            .clients = .{},
+        };
+    }
 
-            await client.frame catch |err| {
-                log.err("Peer {} reported an error: {}", .{ client.conn.address, @errorName(err) });
-            };
+    pub fn deinit(self: *Server) void {
+        self.socket.deinit();
+
+        while (self.clients.pop()) |node| {
+            node.data.dead = true;
+
+            node.data.writeAll("Server is shutting down! Good bye...\n") catch {};
+            node.data.socket.deinit();
         }
     }
 
-    while (true) {
-        var conn = server.accept() catch |err| switch (err) {
-            error.SocketNotListening => return,
-            else => return err,
-        };
-        errdefer conn.socket.deinit();
+    pub fn start(self: *Server, notifier: *const pike.Notifier, address: net.Address) !void {
+        try self.socket.bind(address);
+        try self.socket.listen(128);
+        try self.socket.registerTo(notifier);
 
-        const client = try clients.addOne(allocator);
-        errdefer clients.items.len -= 1;
+        self.frame = async self.run(notifier);
 
-        client.conn = conn;
-        client.frame = async client.run();
-        errdefer await client.frame catch |err| {
-            log.err("Peer {} reported an error: {}", .{ client.conn.address, @errorName(err) });
-        };
-
-        try client.conn.socket.registerTo(notifier);
-
-        log.info("New peer {} connected.", .{client.conn.address});
+        log.info("Listening for peers on: {}", .{address});
     }
-}
+
+    fn run(self: *Server, notifier: *const pike.Notifier) callconv(.Async) void {
+        defer log.debug("TCP server has shut down.", .{});
+
+        while (true) {
+            var conn = self.socket.accept() catch |err| switch (err) {
+                error.SocketNotListening => return,
+                else => {
+                    log.err("Server - socket.accept(): {}", .{@errorName(err)});
+                    continue;
+                },
+            };
+
+            const frame = self.allocator.create(@Frame(Server.runClient)) catch |err| {
+                log.err("Server - allocator.create(Client): {}", .{@errorName(err)});
+                conn.socket.deinit();
+                continue;
+            };
+
+            frame.* = async self.runClient(notifier, conn);
+        }
+    }
+
+    fn runClient(self: *Server, notifier: *const pike.Notifier, conn: pike.Connection) !void {
+        defer {
+            suspend self.allocator.destroy(@frame());
+        }
+
+        var client = Client{ .address = conn.address, .socket = conn.socket };
+        defer if (!client.dead) client.socket.deinit();
+
+        try client.socket.registerTo(notifier);
+
+        var node = ClientQueue.Node{ .data = &client };
+        self.clients.append(&node);
+        defer if (!client.dead) self.clients.remove(&node);
+
+        log.info("New peer {} has connected.", .{client.address});
+        defer log.info("Peer {} has disconnected.", .{client.address});
+
+        try client.writeAll("Hello from the server!\n");
+
+        var buf: [1024]u8 = undefined;
+        while (true) {
+            const num_bytes = try client.read(&buf);
+            if (num_bytes == 0) return;
+
+            const message = mem.trim(u8, buf[0..num_bytes], " \t\r\n");
+            log.info("Peer {} said: {}", .{ client.address, message });
+        }
+    }
+};
 
 pub fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
     defer stopped.* = true;
 
-    const address = try net.Address.parseIp("0.0.0.0", 9000);
+    // Setup allocator.
+
+    var gpa: heap.GeneralPurposeAllocator(.{}) = .{};
+    defer _ = gpa.deinit();
 
     // Setup signal handler.
 
@@ -86,34 +138,14 @@ pub fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
 
     // Setup TCP server.
 
-    var server = try pike.Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0);
+    var server = try Server.init(&gpa.allocator);
+    defer server.deinit();
 
-    {
-        errdefer server.deinit();
-        try server.registerTo(notifier);
-        try server.set(.reuse_address, true);
-        try server.bind(address);
-        try server.listen(128);
-    }
+    // Start the server, and await for an interrupt signal to gracefully shutdown
+    // the server.
 
-    var server_frame = async runServer(notifier, &server);
-    log.info("Listening for peers on: {}", .{address});
-
-    // Listen for interrupt signal.
-
-    {
-        errdefer server.deinit();
-        try signal.wait();
-    }
-
-    // Shutdown.
-
-    log.debug("Shutting down...", .{});
-
-    {
-        server.deinit();
-        try await server_frame;
-    }
+    try server.start(notifier, try net.Address.parseIp("0.0.0.0", 9000));
+    try signal.wait();
 }
 
 pub fn main() !void {
