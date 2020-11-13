@@ -87,7 +87,7 @@ pub const Socket = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.shutdown(posix.SHUT_RDWR) catch |_| return;
+        self.shutdown(posix.SHUT_RDWR) catch {};
 
         os.close(self.handle.inner);
 
