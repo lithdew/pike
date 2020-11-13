@@ -27,8 +27,8 @@ pub const Event = struct {
     pub fn deinit(self: *Self) void {
         os.close(self.handle.inner);
 
-        while (self.readers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
-        while (self.writers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
+        while (self.readers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
+        while (self.writers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {

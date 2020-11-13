@@ -3,6 +3,7 @@ const pike = @import("pike.zig");
 
 const os = std.os;
 const fmt = std.fmt;
+const log = std.log;
 const net = std.net;
 const mem = std.mem;
 const heap = std.heap;
@@ -83,12 +84,12 @@ fn runBenchmarkServer(notifier: *const pike.Notifier, address: net.Address, stop
     try socket.bind(address);
     try socket.listen(128);
 
-    std.debug.print("Listening for clients on: {}\n", .{address});
+    log.info("Listening for clients on: {}", .{address});
 
     var client = try socket.accept();
     defer client.socket.deinit();
 
-    std.debug.print("Accepted client: {}\n", .{client.address});
+    log.info("Accepted client: {}", .{client.address});
 
     try client.socket.registerTo(notifier);
 
@@ -107,7 +108,7 @@ fn runBenchmarkClient(notifier: *const pike.Notifier, address: net.Address, stop
     try socket.registerTo(notifier);
     try socket.connect(address);
 
-    std.debug.print("Connected to: {}\n", .{address});
+    log.info("Connected to: {}", .{address});
 
     var buf: [65536]u8 = undefined;
     while (true) {

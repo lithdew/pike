@@ -2,6 +2,7 @@ const std = @import("std");
 const pike = @import("pike.zig");
 
 const os = std.os;
+const log = std.log;
 
 pub fn main() !void {
     try pike.init();
@@ -29,15 +30,15 @@ fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
 
     try signal.registerTo(notifier);
 
-    std.debug.print("Press Ctrl+C.\n", .{});
+    log.info("Press Ctrl+C.", .{});
 
     try signal.wait();
 
-    std.debug.print("Do it again!\n", .{});
+    log.info("Do it again!", .{});
 
     try signal.wait();
 
-    std.debug.print("I promise; one more time.\n", .{});
+    log.info("I promise; one more time.", .{});
 
     try signal.wait();
 }

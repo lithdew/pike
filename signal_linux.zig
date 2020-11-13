@@ -49,7 +49,7 @@ pub const Signal = struct {
     pub fn deinit(self: *Self) void {
         os.close(self.handle.inner);
         posix.sigprocmask(os.SIG_SETMASK, &self.prev, null) catch {};
-        while (self.readers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
+        while (self.readers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {

@@ -1,6 +1,8 @@
 const std = @import("std");
 const pike = @import("pike.zig");
 
+const log = std.log;
+
 pub fn main() !void {
     try pike.init();
     defer pike.deinit();
@@ -19,21 +21,21 @@ pub fn main() !void {
     try notifier.poll(10_000);
     try nosuspend await frame;
 
-    std.debug.print("Drove the poller once.\n", .{});
+    log.info("Drove the poller once.", .{});
 
     frame = async event.post();
     try notifier.poll(10_000);
     try nosuspend await frame;
 
-    std.debug.print("Drove the poller twice!\n", .{});
+    log.info("Drove the poller twice!", .{});
 
     frame = async event.post();
     try notifier.poll(10_000);
     try nosuspend await frame;
 
-    std.debug.print("Drove the poller thrice!\n", .{});
+    log.info("Drove the poller thrice!", .{});
 
     try notifier.poll(100);
 
-    std.debug.print("This time the poller wasn't driven - it timed out after 100ms.\n", .{});
+    log.info("This time the poller wasn't driven - it timed out after 100ms.", .{});
 }

@@ -91,8 +91,8 @@ pub const Socket = struct {
 
         os.close(self.handle.inner);
 
-        while (self.readers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
-        while (self.writers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
+        while (self.readers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
+        while (self.writers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
@@ -101,6 +101,7 @@ pub const Socket = struct {
 
     inline fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
+
         if (opts.read_ready) if (self.readers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
         if (opts.write_ready) if (self.writers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
     }
