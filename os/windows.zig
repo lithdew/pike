@@ -45,6 +45,7 @@ pub fn loadWinsockExtensionFunction(comptime T: type, sock: ws2_32.SOCKET, guid:
     if (rc == ws2_32.SOCKET_ERROR) {
         return switch (ws2_32.WSAGetLastError()) {
             .WSAEOPNOTSUPP => error.OperationNotSupported,
+            .WSAENOTSOCK => error.FileDescriptorNotASocket,
             else => |err| unexpectedWSAError(err),
         };
     }

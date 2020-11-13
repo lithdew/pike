@@ -191,14 +191,17 @@ pub const Socket = struct {
         var local_addr: *ws2_32.sockaddr = undefined;
         var remote_addr: *ws2_32.sockaddr = undefined;
 
-        try windows.GetAcceptExSockaddrs(
+        windows.GetAcceptExSockaddrs(
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             &buf,
             @as(c_int, @sizeOf(ws2_32.sockaddr_storage)),
             @as(c_int, @sizeOf(ws2_32.sockaddr_storage)),
             &local_addr,
             &remote_addr,
-        );
+        ) catch |err| switch (err) {
+            error.FileDescriptorNotASocket => return error.SocketNotListening,
+            else => return err,
+        };
 
         try incoming.set(.update_accept_context, @ptrCast(ws2_32.SOCKET, self.handle.inner));
 
@@ -227,9 +230,7 @@ pub const Socket = struct {
         const overlapped = self.call(windows.ReadFile_, .{
             self.handle.inner, buf, OVERLAPPED_PARAM,
         }, .{}) catch |err| switch (err) {
-            error.EndOfFile,
-            error.AlreadyShutdown,
-            => return 0,
+            error.EndOfFile => return 0,
             else => return err,
         };
 

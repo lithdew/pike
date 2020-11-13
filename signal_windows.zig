@@ -86,7 +86,7 @@ pub const Signal = struct {
         if (@atomicRmw(u64, &refs, .Sub, 1, .SeqCst) == 1) {
             windows.SetConsoleCtrlHandler(handler, false) catch unreachable;
             while (waker.next(&lock, @bitCast(SignalType, @as(MaskInt, math.maxInt(MaskInt))))) |data| {
-                pike.dispatch(pike.user_data, data.overlapped.frame);
+                pike.dispatch(pike.scope, data.overlapped.frame);
             }
         }
     }
