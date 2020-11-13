@@ -52,8 +52,6 @@ pub fn runServer(notifier: *const pike.Notifier, server: *pike.Socket) !void {
             await client.frame catch |err| {
                 log.err("Peer {} reported an error: {}", .{ client.conn.address, @errorName(err) });
             };
-
-            allocator.destroy(client);
         }
     }
 
