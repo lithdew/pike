@@ -19,9 +19,7 @@ pub const Client = struct {
         var buf: [1024]u8 = undefined;
         while (true) {
             const num_bytes = try self.conn.socket.read(&buf);
-            if (num_bytes == 0) {
-                return;
-            }
+            if (num_bytes == 0) return;
 
             const message = mem.trim(u8, buf[0..num_bytes], " \t\r\n");
             log.info("Peer {} said: {}", .{ self.conn.address, message });
@@ -75,10 +73,7 @@ pub fn runServer(notifier: *const pike.Notifier, server: *pike.Socket) !void {
 }
 
 pub fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
-    defer {
-        log.debug("Application has shut down.", .{});
-        stopped.* = true;
-    }
+    defer stopped.* = true;
 
     const address = try net.Address.parseIp("0.0.0.0", 9000);
 
