@@ -86,17 +86,19 @@ pub const Signal = struct {
         os.close(self.handle.inner);
         posix.sigprocmask(os.SIG_SETMASK, &self.prev, null) catch {};
 
-        var buf: [128]anyframe = undefined;
-        var len: usize = 0;
+        var head: ?*Waker.Node = null;
 
         const held = self.lock.acquire();
-        while (self.readers.wake()) |frame| : (len += 1) {
-            if (len == @sizeOf(@TypeOf(buf))) break;
-            buf[len] = frame;
+        while (self.readers.wake()) |node| {
+            node.next = head;
+            node.prev = null;
+            head = node;
         }
         held.release();
 
-        for (buf[0..len]) |frame| pike.dispatch(pike.scope, frame);
+        while (head) |node| : (head = node.next) {
+            pike.dispatch(pike.scope, node.data);
+        }
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
@@ -109,10 +111,10 @@ pub const Signal = struct {
         if (opts.write_ready) @panic("pike/signal (linux): kqueue unexpectedly reported write-readiness");
 
         const held = self.lock.acquire();
-        const read_frame = if (opts.read_ready) self.readers.wake() else null;
+        const read_node = if (opts.read_ready) self.readers.wake() else null;
         held.release();
 
-        if (read_frame) |frame| pike.dispatch(pike.scope, frame);
+        if (read_node) |node| pike.dispatch(pike.scope, node.data);
     }
 
     pub fn wait(self: *Self) callconv(.Async) !void {
@@ -133,10 +135,10 @@ pub const Signal = struct {
                 },
                 1 => {
                     const held = self.lock.acquire();
-                    const read_frame = self.readers.next();
+                    const read_node = self.readers.next();
                     held.release();
 
-                    if (read_frame) |frame| resume frame;
+                    if (read_node) |node| pike.dispatch(pike.scope, node.data);
                 },
                 else => return error.ShortRead,
             }

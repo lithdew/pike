@@ -91,21 +91,24 @@ pub const Socket = struct {
 
         os.close(self.handle.inner);
 
-        var buf: [128]anyframe = undefined;
-        var len: usize = 0;
+        var head: ?*Waker.Node = null;
 
         const held = self.lock.acquire();
-        while (self.readers.wake()) |frame| : (len += 1) {
-            if (len == @sizeOf(@TypeOf(buf))) break;
-            buf[len] = frame;
+        while (self.readers.wake()) |node| {
+            node.next = head;
+            node.prev = null;
+            head = node;
         }
-        while (self.writers.wake()) |frame| : (len += 1) {
-            if (len == @sizeOf(@TypeOf(buf))) break;
-            buf[len] = frame;
+        while (self.writers.wake()) |node| {
+            node.next = head;
+            node.prev = null;
+            head = node;
         }
         held.release();
 
-        for (buf[0..len]) |frame| resume frame;
+        while (head) |node| : (head = node.next) {
+            pike.dispatch(pike.scope, node.data);
+        }
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
@@ -116,12 +119,12 @@ pub const Socket = struct {
         const self = @fieldParentPtr(Self, "handle", handle);
 
         const held = self.lock.acquire();
-        const read_frame = if (opts.read_ready) self.readers.wake() else null;
-        const write_frame = if (opts.write_ready) self.writers.wake() else null;
+        const read_node = if (opts.read_ready) self.readers.wake() else null;
+        const write_node = if (opts.write_ready) self.writers.wake() else null;
         held.release();
 
-        if (read_frame) |frame| pike.dispatch(pike.scope, frame);
-        if (write_frame) |frame| pike.dispatch(pike.scope, frame);
+        if (read_node) |node| pike.dispatch(pike.scope, node.data);
+        if (write_node) |node| pike.dispatch(pike.scope, node.data);
     }
 
     fn call(self: *Self, comptime function: anytype, args: anytype, comptime opts: pike.CallOptions) callconv(.Async) @typeInfo(@TypeOf(function)).Fn.return_type.? {
@@ -136,12 +139,12 @@ pub const Socket = struct {
             };
 
             const held = self.lock.acquire();
-            const read_frame = if (comptime opts.read) self.readers.next() else null;
-            const write_frame = if (comptime opts.write) self.writers.next() else null;
+            const read_node = if (comptime opts.read) self.readers.next() else null;
+            const write_node = if (comptime opts.write) self.writers.next() else null;
             held.release();
 
-            if (read_frame) |frame| pike.dispatch(pike.scope, frame);
-            if (write_frame) |frame| pike.dispatch(pike.scope, frame);
+            if (read_node) |node| pike.dispatch(pike.scope, node.data);
+            if (write_node) |node| pike.dispatch(pike.scope, node.data);
 
             return result;
         }

@@ -8,28 +8,30 @@ const testing = std.testing;
 const assert = std.debug.assert;
 
 pub const Waker = packed struct {
+    pub const Node = List(anyframe).Node;
+
     const Address = meta.Int(.unsigned, meta.bitCount(usize) - 1);
     const Self = @This();
 
     ready: bool = false,
-    pointer: Address = @ptrToInt(@as(?*List(anyframe).Node, null)),
+    pointer: Address = @ptrToInt(@as(?*Node, null)),
 
-    fn append(self: *Self, node: *List(anyframe).Node) void {
-        var pointer = @intToPtr(?*List(anyframe).Node, @intCast(usize, self.pointer) << 1);
+    fn append(self: *Self, node: *Node) void {
+        var pointer = @intToPtr(?*Node, @intCast(usize, self.pointer) << 1);
         defer self.pointer = @truncate(Address, @ptrToInt(pointer) >> 1);
 
         List(anyframe).append(&pointer, node);
     }
 
-    fn prepend(self: *Self, node: *List(anyframe).Node) void {
-        var pointer = @intToPtr(?*List(anyframe).Node, @intCast(usize, self.pointer) << 1);
+    fn prepend(self: *Self, node: *Node) void {
+        var pointer = @intToPtr(?*Node, @intCast(usize, self.pointer) << 1);
         defer self.pointer = @truncate(Address, @ptrToInt(pointer) >> 1);
 
         List(anyframe).prepend(&pointer, node);
     }
 
-    fn pop(self: *Self) ?anyframe {
-        var pointer = @intToPtr(?*List(anyframe).Node, @intCast(usize, self.pointer) << 1);
+    fn pop(self: *Self) ?*Node {
+        var pointer = @intToPtr(?*Node, @intCast(usize, self.pointer) << 1);
         defer self.pointer = @truncate(Address, @ptrToInt(pointer) >> 1);
 
         return List(anyframe).pop(&pointer);
@@ -44,7 +46,7 @@ pub const Waker = packed struct {
             return;
         }
 
-        var node = List(anyframe).Node{ .data = @frame() };
+        var node = Node{ .data = @frame() };
 
         suspend {
             self.append(&node);
@@ -52,10 +54,10 @@ pub const Waker = packed struct {
         }
     }
 
-    pub fn wake(self: *Self) ?anyframe {
+    pub fn wake(self: *Self) ?*Node {
         if (self.ready) return null;
 
-        if (self.pointer == @ptrToInt(@as(?*List(anyframe).Node, null))) {
+        if (self.pointer == @ptrToInt(@as(?*Node, null))) {
             self.ready = true;
             return null;
         }
@@ -63,8 +65,8 @@ pub const Waker = packed struct {
         return self.pop();
     }
 
-    pub fn next(self: *Self) ?anyframe {
-        if (self.ready or self.pointer == @ptrToInt(@as(?*List(anyframe).Node, null))) {
+    pub fn next(self: *Self) ?*Node {
+        if (self.ready or self.pointer == @ptrToInt(@as(?*Node, null))) {
             return null;
         }
 
@@ -76,7 +78,7 @@ test "Waker.wake() / Waker.wait()" {
     var lock: std.Mutex = .{};
     var waker: Waker = .{};
 
-    testing.expect(waker.wake() == @as(?anyframe, null));
+    testing.expect(waker.wake() == @as(?*Waker.Node, null));
     testing.expect(waker.ready);
 
     nosuspend waker.wait(&lock);
@@ -86,11 +88,11 @@ test "Waker.wake() / Waker.wait()" {
     var B = async waker.wait(&lock);
     var C = async waker.wait(&lock);
 
-    resume waker.wake().?;
-    resume waker.wake().?;
-    resume waker.wake().?;
+    resume waker.wake().?.data;
+    resume waker.wake().?.data;
+    resume waker.wake().?.data;
 
-    testing.expect(waker.wake() == @as(?anyframe, null));
+    testing.expect(waker.wake() == @as(?*Waker.Node, null));
     testing.expect(waker.ready);
 
     nosuspend await A;
@@ -150,7 +152,7 @@ fn List(comptime T: type) type {
             }
         }
 
-        pub fn pop(self: *?*Self.Node) ?T {
+        pub fn pop(self: *?*Self.Node) ?*Self.Node {
             if (self.*) |head| {
                 assert(head.prev == null);
 
@@ -160,7 +162,7 @@ fn List(comptime T: type) type {
                     next.prev = null;
                 }
 
-                return head.data;
+                return head;
             }
 
             return null;
@@ -187,8 +189,8 @@ test "List.append() / List.prepend() / List.pop()" {
     const expected = "ABCD";
 
     var i: usize = 0;
-    while (U8List.pop(&list)) |data| : (i += 1) {
-        testing.expectEqual(data, expected[i]);
+    while (U8List.pop(&list)) |node| : (i += 1) {
+        testing.expectEqual(node.data, expected[i]);
     }
 }
 
