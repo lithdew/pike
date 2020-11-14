@@ -15,17 +15,6 @@ pub const Client = struct {
     address: net.Address,
     frame: @Frame(Client.run),
 
-    pub fn read(self: *Client, buf: []u8) !usize {
-        return self.socket.read(buf);
-    }
-
-    pub fn writeAll(self: *Client, buf: []const u8) !void {
-        var index: usize = 0;
-        while (index < buf.len) {
-            index += try self.socket.write(buf);
-        }
-    }
-
     fn run(self: *Client, server: *Server, notifier: *const pike.Notifier) !void {
         var node = ClientQueue.Node{ .data = self };
 
@@ -43,11 +32,14 @@ pub const Client = struct {
         log.info("New peer {} has connected.", .{self.address});
         defer log.info("Peer {} has disconnected.", .{self.address});
 
-        try self.writeAll("Hello from the server!\n");
+        var reader = self.socket.reader();
+        var writer = self.socket.writer();
+
+        try writer.writeAll("Hello from the server!\n");
 
         var buf: [1024]u8 = undefined;
         while (true) {
-            const num_bytes = try self.read(&buf);
+            const num_bytes = try reader.read(&buf);
             if (num_bytes == 0) return;
 
             const message = mem.trim(u8, buf[0..num_bytes], " \t\r\n");
@@ -84,7 +76,7 @@ pub const Server = struct {
         await self.frame;
 
         while (self.clients.get()) |node| {
-            node.data.writeAll("Server is shutting down! Good bye...\n") catch {};
+            node.data.socket.writer().writeAll("Server is shutting down! Good bye...\n") catch {};
             node.data.socket.deinit();
 
             await node.data.frame catch {};

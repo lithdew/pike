@@ -2,6 +2,7 @@ const std = @import("std");
 const pike = @import("pike.zig");
 const posix = @import("os/posix.zig");
 
+const io = std.io;
 const os = std.os;
 const net = std.net;
 const mem = std.mem;
@@ -65,6 +66,9 @@ pub const Connection = struct {
 };
 
 pub const Socket = struct {
+    pub const Reader = io.Reader(*Self, anyerror, read);
+    pub const Writer = io.Writer(*Self, anyerror, write);
+
     const Self = @This();
 
     handle: pike.Handle,
@@ -219,7 +223,15 @@ pub const Socket = struct {
         };
     }
 
-    pub fn read(self: *Self, buf: []u8) callconv(.Async) !usize {
+    pub inline fn reader(self: *Self) Reader {
+        return Reader{ .context = self };
+    }
+
+    pub inline fn writer(self: *Self) Writer {
+        return Writer{ .context = self };
+    }
+
+    pub fn read(self: *Self, buf: []u8) !usize {
         const num_bytes = self.call(posix.read_, .{ self.handle.inner, buf }, .{ .read = true }) catch |err| switch (err) {
             error.NotOpenForReading => return 0,
             else => return err,
@@ -251,7 +263,7 @@ pub const Socket = struct {
         return num_bytes;
     }
 
-    pub fn write(self: *Self, buf: []const u8) callconv(.Async) !usize {
+    pub fn write(self: *Self, buf: []const u8) !usize {
         return self.call(os.write, .{ self.handle.inner, buf }, .{ .write = true });
     }
 

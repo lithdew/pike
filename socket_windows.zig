@@ -3,6 +3,7 @@ const pike = @import("pike.zig");
 const windows = @import("os/windows.zig");
 const ws2_32 = @import("os/windows/ws2_32.zig");
 
+const io = std.io;
 const os = std.os;
 const net = std.net;
 const mem = std.mem;
@@ -79,6 +80,9 @@ pub const Connection = struct {
 };
 
 pub const Socket = struct {
+    pub const Reader = io.Reader(*Self, anyerror, read);
+    pub const Writer = io.Writer(*Self, anyerror, write);
+
     const Self = @This();
 
     handle: pike.Handle,
@@ -226,7 +230,15 @@ pub const Socket = struct {
         try self.set(.update_connect_context, null);
     }
 
-    pub fn read(self: *Self, buf: []u8) callconv(.Async) !usize {
+    pub inline fn reader(self: *Self) Reader {
+        return Reader{ .context = self };
+    }
+
+    pub inline fn writer(self: *Self) Writer {
+        return Writer{ .context = self };
+    }
+
+    pub fn read(self: *Self, buf: []u8) !usize {
         const overlapped = self.call(windows.ReadFile_, .{
             self.handle.inner, buf, OVERLAPPED_PARAM,
         }, .{}) catch |err| switch (err) {
@@ -281,7 +293,7 @@ pub const Socket = struct {
         return overlapped.inner.InternalHigh;
     }
 
-    pub fn write(self: *Self, buf: []const u8) callconv(.Async) !usize {
+    pub fn write(self: *Self, buf: []const u8) !usize {
         const overlapped = self.call(windows.WriteFile_, .{
             self.handle.inner, buf, OVERLAPPED_PARAM,
         }, .{}) catch |err| switch (err) {
