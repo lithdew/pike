@@ -56,16 +56,14 @@ pub fn main() !void {
     defer notifier.deinit();
 
     var stopped = false;
+    var server_frame: @Frame(runBenchmarkServer) = undefined;
+    var client_frame: @Frame(runBenchmarkClient) = undefined;
 
-    if (run_server) {
-        var server_frame = async runBenchmarkServer(&notifier, address, &stopped);
-        defer nosuspend await server_frame catch |err| @panic(@errorName(err));
-    }
+    if (run_server) server_frame = async runBenchmarkServer(&notifier, address, &stopped);
+    if (run_client) client_frame = async runBenchmarkClient(&notifier, address, &stopped);
 
-    if (run_client) {
-        var client_frame = async runBenchmarkClient(&notifier, address, &stopped);
-        defer nosuspend await client_frame catch |err| @panic(@errorName(err));
-    }
+    defer if (run_server) nosuspend await server_frame catch |err| @panic(@errorName(err));
+    defer if (run_client) nosuspend await client_frame catch |err| @panic(@errorName(err));
 
     while (!stopped) {
         try notifier.poll(10_000);
