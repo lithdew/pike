@@ -52,10 +52,7 @@ pub const Waker = packed struct {
         }
     }
 
-    pub fn wake(self: *Self, lock: *std.Mutex) ?anyframe {
-        const held = lock.acquire();
-        defer held.release();
-
+    pub fn wake(self: *Self) ?anyframe {
         if (self.ready) return null;
 
         if (self.pointer == @ptrToInt(@as(?*List(anyframe).Node, null))) {
@@ -66,10 +63,7 @@ pub const Waker = packed struct {
         return self.pop();
     }
 
-    pub fn next(self: *Self, lock: *std.Mutex) ?anyframe {
-        const held = lock.acquire();
-        defer held.release();
-
+    pub fn next(self: *Self) ?anyframe {
         if (self.ready or self.pointer == @ptrToInt(@as(?*List(anyframe).Node, null))) {
             return null;
         }
@@ -82,7 +76,7 @@ test "Waker.wake() / Waker.wait()" {
     var lock: std.Mutex = .{};
     var waker: Waker = .{};
 
-    testing.expect(waker.wake(&lock) == @as(?anyframe, null));
+    testing.expect(waker.wake() == @as(?anyframe, null));
     testing.expect(waker.ready);
 
     nosuspend waker.wait(&lock);
@@ -92,11 +86,11 @@ test "Waker.wake() / Waker.wait()" {
     var B = async waker.wait(&lock);
     var C = async waker.wait(&lock);
 
-    resume waker.wake(&lock).?;
-    resume waker.wake(&lock).?;
-    resume waker.wake(&lock).?;
+    resume waker.wake().?;
+    resume waker.wake().?;
+    resume waker.wake().?;
 
-    testing.expect(waker.wake(&lock) == @as(?anyframe, null));
+    testing.expect(waker.wake() == @as(?anyframe, null));
     testing.expect(waker.ready);
 
     nosuspend await A;

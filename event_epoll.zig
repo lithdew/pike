@@ -30,15 +30,16 @@ pub const Event = struct {
         var buf: [128]anyframe = undefined;
         var len: usize = 0;
 
-        while (self.readers.wake(&self.lock)) |frame| : (len += 1) {
+        const held = self.lock.acquire();
+        while (self.readers.wake()) |frame| : (len += 1) {
             if (len == @sizeOf(@TypeOf(buf))) break;
             buf[len] = frame;
         }
-
-        while (self.writers.wake(&self.lock)) |frame| : (len += 1) {
+        while (self.writers.wake()) |frame| : (len += 1) {
             if (len == @sizeOf(@TypeOf(buf))) break;
             buf[len] = frame;
         }
+        held.release();
 
         for (buf[0..len]) |frame| pike.dispatch(pike.scope, frame);
     }
@@ -50,16 +51,16 @@ pub const Event = struct {
     inline fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
 
-        const read_frame = if (opts.read_ready) self.readers.wake(&self.lock) else null;
-        const write_frame = if (opts.write_ready) self.writers.wake(&self.lock) else null;
+        const held = self.lock.acquire();
+        const read_frame = if (opts.read_ready) self.readers.wake() else null;
+        const write_frame = if (opts.write_ready) self.writers.wake() else null;
+        held.release();
 
         if (read_frame) |frame| pike.dispatch(pike.scope, frame);
         if (write_frame) |frame| pike.dispatch(pike.scope, frame);
     }
 
     fn write(self: *Self, amount: u64) callconv(.Async) !void {
-        defer if (self.writers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
-
         while (true) {
             const num_bytes = os.write(self.handle.inner, mem.asBytes(&amount)) catch |err| switch (err) {
                 error.WouldBlock => {
@@ -73,13 +74,17 @@ pub const Event = struct {
                 return error.ShortWrite;
             }
 
+            const held = self.lock.acquire();
+            const write_frame = self.writers.next();
+            held.release();
+
+            if (write_frame) |frame| pike.dispatch(pike.scope, frame);
+
             return;
         }
     }
 
     fn read(self: *Self) callconv(.Async) !void {
-        defer if (self.writers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
-
         var counter: u64 = 0;
 
         while (true) {
@@ -94,6 +99,12 @@ pub const Event = struct {
             if (num_bytes != @sizeOf(@TypeOf(counter))) {
                 return error.ShortRead;
             }
+
+            const held = self.lock.acquire();
+            const read_frame = self.readers.next();
+            held.release();
+
+            if (read_frame) |frame| pike.dispatch(pike.scope, frame);
 
             return;
         }

@@ -50,15 +50,9 @@ pub const Signal = struct {
         os.close(self.handle.inner);
         posix.sigprocmask(os.SIG_SETMASK, &self.prev, null) catch {};
 
-        var buf: [128]anyframe = undefined;
-        var len: usize = 0;
-
-        while (self.readers.wake(&self.lock)) |frame| : (len += 1) {
-            if (len == @sizeOf(@TypeOf(buf))) break;
-            buf[len] = frame;
-        }
-
-        for (buf[0..len]) |frame| pike.dispatch(pike.scope, frame);
+        const held = self.lock.acquire();
+        while (self.readers.wake()) |frame| pike.dispatch(pike.scope, frame);
+        held.release();
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
@@ -67,13 +61,17 @@ pub const Signal = struct {
 
     inline fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
-        if (opts.read_ready) if (self.readers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
+
         if (opts.write_ready) @panic("pike/signal (linux): signalfd unexpectedly reported write-readiness");
+
+        const held = self.lock.acquire();
+        const read_frame = if (opts.read_ready) self.readers.wake() else null;
+        held.release();
+
+        if (read_frame) |frame| pike.dispatch(pike.scope, frame);
     }
 
     pub fn wait(self: *Self) callconv(.Async) !void {
-        defer if (self.readers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
-
         var info: os.signalfd_siginfo = undefined;
 
         while (true) {
@@ -88,6 +86,12 @@ pub const Signal = struct {
             if (num_bytes != @sizeOf(@TypeOf(info))) {
                 return error.ShortRead;
             }
+
+            const held = self.lock.acquire();
+            const read_frame = self.readers.next();
+            held.release();
+
+            if (read_frame) |frame| pike.dispatch(pike.scope, frame);
 
             return;
         }

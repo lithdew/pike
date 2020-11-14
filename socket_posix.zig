@@ -94,17 +94,18 @@ pub const Socket = struct {
         var buf: [128]anyframe = undefined;
         var len: usize = 0;
 
-        while (self.readers.wake(&self.lock)) |frame| : (len += 1) {
+        const held = self.lock.acquire();
+        while (self.readers.wake()) |frame| : (len += 1) {
             if (len == @sizeOf(@TypeOf(buf))) break;
             buf[len] = frame;
         }
-
-        while (self.writers.wake(&self.lock)) |frame| : (len += 1) {
+        while (self.writers.wake()) |frame| : (len += 1) {
             if (len == @sizeOf(@TypeOf(buf))) break;
             buf[len] = frame;
         }
+        held.release();
 
-        for (buf[0..len]) |frame| pike.dispatch(pike.scope, frame);
+        for (buf[0..len]) |frame| resume frame;
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
@@ -114,17 +115,16 @@ pub const Socket = struct {
     inline fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
 
-        const read_frame = if (opts.read_ready) self.readers.wake(&self.lock) else null;
-        const write_frame = if (opts.write_ready) self.writers.wake(&self.lock) else null;
+        const held = self.lock.acquire();
+        const read_frame = if (opts.read_ready) self.readers.wake() else null;
+        const write_frame = if (opts.write_ready) self.writers.wake() else null;
+        held.release();
 
         if (read_frame) |frame| pike.dispatch(pike.scope, frame);
         if (write_frame) |frame| pike.dispatch(pike.scope, frame);
     }
 
     fn call(self: *Self, comptime function: anytype, args: anytype, comptime opts: pike.CallOptions) callconv(.Async) @typeInfo(@TypeOf(function)).Fn.return_type.? {
-        defer if (comptime opts.read) if (self.readers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
-        defer if (comptime opts.write) if (self.writers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
-
         while (true) {
             const result = @call(.{ .modifier = .always_inline }, function, args) catch |err| switch (err) {
                 error.WouldBlock => {
@@ -134,6 +134,14 @@ pub const Socket = struct {
                 },
                 else => return err,
             };
+
+            const held = self.lock.acquire();
+            const read_frame = if (comptime opts.read) self.readers.next() else null;
+            const write_frame = if (comptime opts.write) self.writers.next() else null;
+            held.release();
+
+            if (read_frame) |frame| pike.dispatch(pike.scope, frame);
+            if (write_frame) |frame| pike.dispatch(pike.scope, frame);
 
             return result;
         }

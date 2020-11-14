@@ -89,10 +89,12 @@ pub const Signal = struct {
         var buf: [128]anyframe = undefined;
         var len: usize = 0;
 
-        while (self.readers.wake(&self.lock)) |frame| : (len += 1) {
+        const held = self.lock.acquire();
+        while (self.readers.wake()) |frame| : (len += 1) {
             if (len == @sizeOf(@TypeOf(buf))) break;
             buf[len] = frame;
         }
+        held.release();
 
         for (buf[0..len]) |frame| pike.dispatch(pike.scope, frame);
     }
@@ -103,13 +105,17 @@ pub const Signal = struct {
 
     inline fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
-        if (opts.read_ready) if (self.readers.wake(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
-        if (opts.write_ready) @panic("pike/signal (darwin): kqueue unexpectedly reported read-readiness");
+
+        if (opts.write_ready) @panic("pike/signal (linux): kqueue unexpectedly reported write-readiness");
+
+        const held = self.lock.acquire();
+        const read_frame = if (opts.read_ready) self.readers.wake() else null;
+        held.release();
+
+        if (read_frame) |frame| pike.dispatch(pike.scope, frame);
     }
 
     pub fn wait(self: *Self) callconv(.Async) !void {
-        defer if (self.readers.next(&self.lock)) |frame| pike.dispatch(pike.scope, frame);
-
         var events: [1]os.Kevent = undefined;
 
         while (true) {
@@ -125,7 +131,13 @@ pub const Signal = struct {
                     self.readers.wait(&self.lock);
                     continue;
                 },
-                1 => return,
+                1 => {
+                    const held = self.lock.acquire();
+                    const read_frame = self.readers.next();
+                    held.release();
+
+                    if (read_frame) |frame| resume frame;
+                },
                 else => return error.ShortRead,
             }
         }
