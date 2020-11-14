@@ -11,10 +11,10 @@ const atomic = std.atomic;
 pub const ClientQueue = atomic.Queue(*Client);
 
 pub const Client = struct {
-    node: ClientQueue.Node,
     socket: pike.Socket,
     address: net.Address,
 
+    node: ClientQueue.Node,
     frame: @Frame(Client.run),
 
     pub fn read(self: *Client, buf: []u8) !usize {
@@ -57,11 +57,11 @@ pub const Client = struct {
 };
 
 pub const Server = struct {
-    frame: @Frame(Server.run),
-    allocator: *mem.Allocator,
-
     socket: pike.Socket,
     clients: ClientQueue,
+
+    allocator: *mem.Allocator,
+    frame: @Frame(Server.run),
 
     pub fn init(allocator: *mem.Allocator) !Server {
         var socket = try pike.Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0);
@@ -70,11 +70,11 @@ pub const Server = struct {
         try socket.set(.reuse_address, true);
 
         return Server{
-            .frame = undefined,
-            .allocator = allocator,
-
             .socket = socket,
             .clients = ClientQueue.init(),
+
+            .frame = undefined,
+            .allocator = allocator,
         };
     }
 
@@ -120,11 +120,10 @@ pub const Server = struct {
                 continue;
             };
 
-            client.node.data = client;
-
             client.socket = conn.socket;
             client.address = conn.address;
 
+            client.node.data = client;
             client.frame = async client.run(self, notifier);
         }
     }
