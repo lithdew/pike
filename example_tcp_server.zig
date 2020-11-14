@@ -13,8 +13,6 @@ pub const ClientQueue = atomic.Queue(*Client);
 pub const Client = struct {
     socket: pike.Socket,
     address: net.Address,
-
-    node: ClientQueue.Node,
     frame: @Frame(Client.run),
 
     pub fn read(self: *Client, buf: []u8) !usize {
@@ -29,9 +27,11 @@ pub const Client = struct {
     }
 
     fn run(self: *Client, server: *Server, notifier: *const pike.Notifier) !void {
-        server.clients.put(&self.node);
+        var node = ClientQueue.Node{ .data = self };
 
-        defer if (server.clients.remove(&self.node)) {
+        server.clients.put(&node);
+
+        defer if (server.clients.remove(&node)) {
             suspend {
                 self.socket.deinit();
                 server.allocator.destroy(self);
@@ -122,8 +122,6 @@ pub const Server = struct {
 
             client.socket = conn.socket;
             client.address = conn.address;
-
-            client.node.data = client;
             client.frame = async client.run(self, notifier);
         }
     }
