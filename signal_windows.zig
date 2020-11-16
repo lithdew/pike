@@ -94,7 +94,7 @@ pub const Signal = struct {
                 buf[len] = data.overlapped.frame;
             }
 
-            for (buf[0..len]) |frame| pike.dispatch(pike.scope, frame);
+            for (buf[0..len]) |frame| pike.dispatch(frame);
         }
     }
 
@@ -105,7 +105,7 @@ pub const Signal = struct {
     pub fn wait(self: *const Self) callconv(.Async) !void {
         if (self.port == windows.INVALID_HANDLE_VALUE) return error.NotRegistered;
 
-        defer if (waker.next(&lock, self.current_signal)) |data| pike.dispatch(pike.scope, data.overlapped.frame);
+        defer if (waker.next(&lock, self.current_signal)) |data| pike.dispatch(data.overlapped.task);
 
         var data = Data{
             .port = self.port,

@@ -21,9 +21,9 @@ pub const Handle = struct {
 
 pub const Overlapped = struct {
     inner: windows.OVERLAPPED,
-    frame: anyframe,
+    task: pike.Task,
 
-    pub fn init(frame: anyframe) Overlapped {
+    pub fn init(task: pike.Task) Overlapped {
         return .{
             .inner = .{
                 .Internal = 0,
@@ -32,7 +32,7 @@ pub const Overlapped = struct {
                 .OffsetHigh = 0,
                 .hEvent = null,
             },
-            .frame = frame,
+            .task = task,
         };
     }
 };

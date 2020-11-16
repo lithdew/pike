@@ -1,4 +1,5 @@
 const std = @import("std");
+const pike = @import("pike.zig");
 
 const mem = std.mem;
 const meta = std.meta;
@@ -8,7 +9,7 @@ const testing = std.testing;
 const assert = std.debug.assert;
 
 pub const Waker = packed struct {
-    pub const Node = List(anyframe).Node;
+    pub const Node = List(pike.Task).Node;
 
     const Address = meta.Int(.unsigned, meta.bitCount(usize) - 1);
     const Self = @This();
@@ -20,21 +21,21 @@ pub const Waker = packed struct {
         var pointer = @intToPtr(?*Node, @intCast(usize, self.pointer) << 1);
         defer self.pointer = @truncate(Address, @ptrToInt(pointer) >> 1);
 
-        List(anyframe).append(&pointer, node);
+        List(pike.Task).append(&pointer, node);
     }
 
     fn prepend(self: *Self, node: *Node) void {
         var pointer = @intToPtr(?*Node, @intCast(usize, self.pointer) << 1);
         defer self.pointer = @truncate(Address, @ptrToInt(pointer) >> 1);
 
-        List(anyframe).prepend(&pointer, node);
+        List(pike.Task).prepend(&pointer, node);
     }
 
     fn pop(self: *Self) ?*Node {
         var pointer = @intToPtr(?*Node, @intCast(usize, self.pointer) << 1);
         defer self.pointer = @truncate(Address, @ptrToInt(pointer) >> 1);
 
-        return List(anyframe).pop(&pointer);
+        return List(pike.Task).pop(&pointer);
     }
 
     pub fn wait(self: *Self, lock: *std.Mutex) callconv(.Async) void {
@@ -46,7 +47,7 @@ pub const Waker = packed struct {
             return;
         }
 
-        var node = Node{ .data = @frame() };
+        var node = Node{ .data = pike.Task.init(@frame()) };
 
         suspend {
             self.append(&node);
@@ -88,9 +89,9 @@ test "Waker.wake() / Waker.wait()" {
     var B = async waker.wait(&lock);
     var C = async waker.wait(&lock);
 
-    resume waker.wake().?.data;
-    resume waker.wake().?.data;
-    resume waker.wake().?.data;
+    pike.dispatch(&waker.wake().?.data);
+    pike.dispatch(&waker.wake().?.data);
+    pike.dispatch(&waker.wake().?.data);
 
     testing.expect(waker.wake() == @as(?*Waker.Node, null));
     testing.expect(waker.ready);
