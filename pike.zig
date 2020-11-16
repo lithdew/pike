@@ -22,19 +22,25 @@ pub const WakeOptions = packed struct {
 const has_epoll = @hasDecl(os.system, "epoll_create1") and @hasDecl(os.system, "epoll_ctl") and @hasDecl(os, "epoll_event");
 const has_kqueue = @hasDecl(os.system, "kqueue") and @hasDecl(os.system, "kevent") and @hasDecl(os, "Kevent");
 
-// Export asynchronous frame dispatcher and user scope (context).
+// Export asynchronous frame dispatcher and user scope (Task).
 
-pub const scope = if (@hasDecl(root, "dispatch_scope"))
-    root.dispatch_scope
-else
-    @as(?usize, null);
-
-pub const dispatch: fn (@TypeOf(scope), anyframe) void = if (@hasDecl(root, "dispatch"))
-    root.dispatch
+pub const Task = if (@hasDecl(root, "pike_task"))
+    root.pike_task
 else
     struct {
-        inline fn default(_: @TypeOf(scope), frame: anyframe) void {
-            resume frame;
+        frame: anyframe,
+
+        pub inline fn init(frame: anyframe) Task {
+            return .{ .frame = frame };
+        }
+    };
+
+pub const dispatch: fn (*Task) void = if (@hasDecl(root, "pike_dispatch"))
+    root.pike_dispatch
+else
+    struct {
+        inline fn default(task: *Task) void {
+            resume task.frame;
         }
     }.default;
 

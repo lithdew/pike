@@ -111,7 +111,7 @@ pub const Socket = struct {
         held.release();
 
         while (head) |node| : (head = node.next) {
-            pike.dispatch(pike.scope, node.data);
+            pike.dispatch(&node.data);
         }
     }
 
@@ -127,8 +127,8 @@ pub const Socket = struct {
         const write_node = if (opts.write_ready) self.writers.wake() else null;
         held.release();
 
-        if (read_node) |node| pike.dispatch(pike.scope, node.data);
-        if (write_node) |node| pike.dispatch(pike.scope, node.data);
+        if (read_node) |node| pike.dispatch(&node.data);
+        if (write_node) |node| pike.dispatch(&node.data);
     }
 
     fn call(self: *Self, comptime function: anytype, args: anytype, comptime opts: pike.CallOptions) callconv(.Async) @typeInfo(@TypeOf(function)).Fn.return_type.? {
@@ -147,8 +147,8 @@ pub const Socket = struct {
             const write_node = if (comptime opts.write) self.writers.next() else null;
             held.release();
 
-            if (read_node) |node| pike.dispatch(pike.scope, node.data);
-            if (write_node) |node| pike.dispatch(pike.scope, node.data);
+            if (read_node) |node| pike.dispatch(&node.data);
+            if (write_node) |node| pike.dispatch(&node.data);
 
             return result;
         }

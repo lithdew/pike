@@ -61,7 +61,7 @@ pub const Signal = struct {
         held.release();
 
         while (head) |node| : (head = node.next) {
-            pike.dispatch(pike.scope, node.data);
+            pike.dispatch(&node.data);
         }
     }
 
@@ -78,7 +78,7 @@ pub const Signal = struct {
         const read_node = if (opts.read_ready) self.readers.wake() else null;
         held.release();
 
-        if (read_node) |node| pike.dispatch(pike.scope, node.data);
+        if (read_node) |node| pike.dispatch(&node.data);
     }
 
     pub fn wait(self: *Self) callconv(.Async) !void {
@@ -101,7 +101,7 @@ pub const Signal = struct {
             const read_node = self.readers.next();
             held.release();
 
-            if (read_node) |node| pike.dispatch(pike.scope, node.data);
+            if (read_node) |node| pike.dispatch(&node.data);
 
             return;
         }

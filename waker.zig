@@ -1,4 +1,5 @@
 const std = @import("std");
+const pike = @import("pike.zig");
 
 const mem = std.mem;
 const meta = std.meta;
@@ -8,7 +9,7 @@ const testing = std.testing;
 const assert = std.debug.assert;
 
 pub const Waker = packed struct {
-    pub const Node = List(anyframe).Node;
+    pub const Node = List(pike.Task).Node;
 
     const Address = meta.Int(.unsigned, meta.bitCount(usize) - 1);
     const Self = @This();
@@ -20,21 +21,21 @@ pub const Waker = packed struct {
         var pointer = @intToPtr(?*Node, @intCast(usize, self.pointer) << 1);
         defer self.pointer = @truncate(Address, @ptrToInt(pointer) >> 1);
 
-        List(anyframe).append(&pointer, node);
+        List(pike.Task).append(&pointer, node);
     }
 
     fn prepend(self: *Self, node: *Node) void {
         var pointer = @intToPtr(?*Node, @intCast(usize, self.pointer) << 1);
         defer self.pointer = @truncate(Address, @ptrToInt(pointer) >> 1);
 
-        List(anyframe).prepend(&pointer, node);
+        List(pike.Task).prepend(&pointer, node);
     }
 
     fn pop(self: *Self) ?*Node {
         var pointer = @intToPtr(?*Node, @intCast(usize, self.pointer) << 1);
         defer self.pointer = @truncate(Address, @ptrToInt(pointer) >> 1);
 
-        return List(anyframe).pop(&pointer);
+        return List(pike.Task).pop(&pointer);
     }
 
     pub fn wait(self: *Self, lock: *std.Mutex) callconv(.Async) void {
@@ -46,7 +47,7 @@ pub const Waker = packed struct {
             return;
         }
 
-        var node = Node{ .data = @frame() };
+        var node = Node{ .data = pike.Task.init(@frame()) };
 
         suspend {
             self.append(&node);
@@ -88,9 +89,9 @@ test "Waker.wake() / Waker.wait()" {
     var B = async waker.wait(&lock);
     var C = async waker.wait(&lock);
 
-    resume waker.wake().?.data;
-    resume waker.wake().?.data;
-    resume waker.wake().?.data;
+    pike.dispatch(&waker.wake().?.data);
+    pike.dispatch(&waker.wake().?.data);
+    pike.dispatch(&waker.wake().?.data);
 
     testing.expect(waker.wake() == @as(?*Waker.Node, null));
     testing.expect(waker.ready);
@@ -199,16 +200,14 @@ pub fn PackedWaker(comptime Frame: type, comptime Set: type) type {
     const set_count = set_fields.len;
 
     return struct {
-        const FrameList = PackedList(Frame, Set);
-        const FrameNode = FrameList.Node;
+        pub const FrameList = PackedList(Frame, Set);
+        pub const FrameNode = FrameList.Node;
         const Self = @This();
 
         ready: [set_count]bool = [_]bool{false} ** set_count,
         heads: [set_count]?*FrameNode = [_]?*FrameNode{null} ** set_count,
 
-        pub fn wait(self: *Self, lock: *std.Mutex, set: Set, data: Frame, frame: *anyframe) callconv(.Async) void {
-            const held = lock.acquire();
-
+        pub fn wait(self: *Self, set: Set) bool {
             var any_ready = false;
             inline for (set_fields) |field, field_index| {
                 if (@field(set, field.name) and self.ready[field_index]) {
@@ -219,23 +218,10 @@ pub fn PackedWaker(comptime Frame: type, comptime Set: type) type {
                 }
             }
 
-            if (any_ready) {
-                held.release();
-            } else {
-                var node = FrameNode{ .data = data };
-
-                suspend {
-                    FrameList.append(&self.heads, set, &node);
-                    frame.* = @frame();
-                    held.release();
-                }
-            }
+            return any_ready;
         }
 
-        pub fn wake(self: *Self, lock: *std.Mutex, set: Set) ?Frame {
-            const held = lock.acquire();
-            defer held.release();
-
+        pub fn wake(self: *Self, set: Set) ?*FrameList.Node {
             return FrameList.pop(&self.heads, set) orelse blk: {
                 inline for (set_fields) |field, field_index| {
                     if (@field(set, field.name) and self.heads[field_index] == null) {
@@ -247,10 +233,7 @@ pub fn PackedWaker(comptime Frame: type, comptime Set: type) type {
             };
         }
 
-        pub fn next(self: *Self, lock: *std.Mutex, set: Set) ?Frame {
-            const held = lock.acquire();
-            defer held.release();
-
+        pub fn next(self: *Self, set: Set) ?*FrameList.Node {
             inline for (set_fields) |field, field_index| {
                 if (@field(set, field.name) and self.heads[field_index] == null) {
                     return null;
@@ -275,22 +258,26 @@ test "PackedWaker.wake() / PackedWaker.wait()" {
     };
 
     const Test = struct {
-        fn do(waker: *PackedWaker(*Scope, Set), lock: *std.Mutex, set: Set, completed: *bool) callconv(.Async) void {
+        fn do(waker: *PackedWaker(*Scope, Set), set: Set, completed: *bool) callconv(.Async) void {
             defer completed.* = true;
 
-            var scope = Scope{ .inner = undefined };
-            waker.wait(lock, set, &scope, &scope.inner);
+            if (waker.wait(set)) return;
+
+            suspend {
+                var scope = Scope{ .inner = @frame() };
+                var node = meta.Child(@TypeOf(waker)).FrameNode{ .data = &scope };
+                meta.Child(@TypeOf(waker)).FrameList.append(&waker.heads, set, &node);
+            }
         }
     };
 
-    var lock: std.Mutex = .{};
     var waker: PackedWaker(*Scope, Set) = .{};
 
-    testing.expect(waker.wake(&lock, .{ .a = true, .b = true, .c = true, .d = true }) == null);
+    testing.expect(waker.wake(.{ .a = true, .b = true, .c = true, .d = true }) == null);
     testing.expect(mem.allEqual(bool, &waker.ready, true));
 
     var scope = Scope{ .inner = undefined };
-    nosuspend waker.wait(&lock, .{ .a = true, .b = true, .c = true, .d = true }, &scope, &scope.inner);
+    testing.expect(waker.wait(.{ .a = true, .b = true, .c = true, .d = true }));
     testing.expect(mem.allEqual(bool, &waker.ready, false));
 
     var A_done = false;
@@ -298,24 +285,24 @@ test "PackedWaker.wake() / PackedWaker.wait()" {
     var C_done = false;
     var D_done = false;
 
-    var A = async Test.do(&waker, &lock, .{ .a = true, .c = true }, &A_done);
-    var B = async Test.do(&waker, &lock, .{ .a = true, .b = true, .c = true }, &B_done);
-    var C = async Test.do(&waker, &lock, .{ .a = true, .b = true, .d = true }, &C_done);
-    var D = async Test.do(&waker, &lock, .{ .d = true }, &D_done);
+    var A = async Test.do(&waker, .{ .a = true, .c = true }, &A_done);
+    var B = async Test.do(&waker, .{ .a = true, .b = true, .c = true }, &B_done);
+    var C = async Test.do(&waker, .{ .a = true, .b = true, .d = true }, &C_done);
+    var D = async Test.do(&waker, .{ .d = true }, &D_done);
 
-    resume waker.wake(&lock, .{ .b = true }).?.inner;
+    resume waker.wake(.{ .b = true }).?.data.inner;
     nosuspend await B;
     testing.expect(B_done);
 
-    resume waker.wake(&lock, .{ .b = true }).?.inner;
+    resume waker.wake(.{ .b = true }).?.data.inner;
     nosuspend await C;
     testing.expect(C_done);
 
-    resume waker.wake(&lock, .{ .a = true }).?.inner;
+    resume waker.wake(.{ .a = true }).?.data.inner;
     nosuspend await A;
     testing.expect(A_done);
 
-    resume waker.wake(&lock, .{ .d = true }).?.inner;
+    resume waker.wake(.{ .d = true }).?.data.inner;
     nosuspend await D;
     testing.expect(D_done);
 }
@@ -374,7 +361,7 @@ fn PackedList(comptime T: type, comptime U: type) type {
             }
         }
 
-        pub fn pop(heads: *[set_count]?*Self.Node, set: U) ?T {
+        pub fn pop(heads: *[set_count]?*Self.Node, set: U) ?*Self.Node {
             inline for (set_fields) |field, field_index| {
                 if (@field(set, field.name) and heads[field_index] != null) {
                     const head = heads[field_index] orelse unreachable;
@@ -386,7 +373,7 @@ fn PackedList(comptime T: type, comptime U: type) type {
                         if (heads[j] == head) heads[j] = head.next[j];
                     }
 
-                    return head.data;
+                    return head;
                 }
             }
 
@@ -418,10 +405,10 @@ test "PackedList.append() / PackedList.prepend() / PackedList.pop()" {
     U8List.prepend(&heads, .{ .a = true, .b = true, .d = true }, &C);
     U8List.append(&heads, .{ .d = true }, &D);
 
-    testing.expect(U8List.pop(&heads, .{ .b = true }) == C.data);
-    testing.expect(U8List.pop(&heads, .{ .b = true }) == B.data);
-    testing.expect(U8List.pop(&heads, .{ .a = true }) == A.data);
-    testing.expect(U8List.pop(&heads, .{ .d = true }) == D.data);
+    testing.expect(U8List.pop(&heads, .{ .b = true }).?.data == C.data);
+    testing.expect(U8List.pop(&heads, .{ .b = true }).?.data == B.data);
+    testing.expect(U8List.pop(&heads, .{ .a = true }).?.data == A.data);
+    testing.expect(U8List.pop(&heads, .{ .d = true }).?.data == D.data);
 
     testing.expect(mem.allEqual(?*Node, &heads, null));
 }
@@ -456,11 +443,11 @@ test "PackedList.append() / PackedList.prepend() / PackedList.pop()" {
     testing.expect(heads[2] == &B and heads[2].?.prev[2] == &B and heads[2].?.prev[2].?.next[2] == null);
     testing.expect(heads[3] == null);
 
-    testing.expect(U8List.pop(&heads, .{ .a = true }) == B.data);
+    testing.expect(U8List.pop(&heads, .{ .a = true }).?.data == B.data);
     testing.expect(heads[0] == &A);
     testing.expect(heads[0].?.prev[0] == &A);
     testing.expect(mem.allEqual(?*Node, &heads[0].?.next, null));
 
-    testing.expect(U8List.pop(&heads, .{ .a = true }) == A.data);
+    testing.expect(U8List.pop(&heads, .{ .a = true }).?.data == A.data);
     testing.expect(mem.allEqual(?*Node, &heads, null));
 }
