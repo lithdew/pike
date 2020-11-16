@@ -28,7 +28,7 @@ pub const Signal = struct {
     var mask: u64 = 0;
 
     var lock: std.Mutex = .{};
-    var waker: PackedWaker(*Data, SignalType) = .{};
+    var waker: PackedWaker(Data, SignalType) = .{};
 
     port: windows.HANDLE,
     current_signal: SignalType,
@@ -41,23 +41,41 @@ pub const Signal = struct {
             switch (signal) {
                 windows.CTRL_C_EVENT, windows.CTRL_BREAK_EVENT => {
                     if (!current.interrupt and !current.terminate) break :blk windows.FALSE;
-                    if (waker.wake(&lock, .{ .interrupt = true, .terminate = true })) |data| {
-                        windows.PostQueuedCompletionStatus(data.port, 0, 0, &data.overlapped.inner) catch unreachable;
+
+                    const held = lock.acquire();
+                    const next_node = waker.wake(.{ .interrupt = true, .terminate = true });
+                    held.release();
+
+                    if (next_node) |node| {
+                        windows.PostQueuedCompletionStatus(node.data.port, 0, 0, &node.data.overlapped.inner) catch unreachable;
                     }
+
                     break :blk windows.TRUE;
                 },
                 windows.CTRL_CLOSE_EVENT => {
                     if (!current.hup) break :blk windows.FALSE;
-                    if (waker.wake(&lock, .{ .hup = true })) |data| {
-                        windows.PostQueuedCompletionStatus(data.port, 0, 0, &data.overlapped.inner) catch unreachable;
+
+                    const held = lock.acquire();
+                    const next_node = waker.wake(.{ .hup = true });
+                    held.release();
+
+                    if (next_node) |node| {
+                        windows.PostQueuedCompletionStatus(node.data.port, 0, 0, &node.data.overlapped.inner) catch unreachable;
                     }
+
                     break :blk windows.TRUE;
                 },
                 windows.CTRL_LOGOFF_EVENT, windows.CTRL_SHUTDOWN_EVENT => {
                     if (!current.quit) break :blk windows.FALSE;
-                    if (waker.wake(&lock, .{ .quit = true })) |data| {
-                        windows.PostQueuedCompletionStatus(data.port, 0, 0, &data.overlapped.inner) catch unreachable;
+
+                    const held = lock.acquire();
+                    const next_node = waker.wake(.{ .quit = true });
+                    held.release();
+
+                    if (next_node) |node| {
+                        windows.PostQueuedCompletionStatus(node.data.port, 0, 0, &node.data.overlapped.inner) catch unreachable;
                     }
+
                     break :blk windows.TRUE;
                 },
                 else => break :blk windows.FALSE,
@@ -86,15 +104,11 @@ pub const Signal = struct {
         if (@atomicRmw(u64, &refs, .Sub, 1, .SeqCst) == 1) {
             windows.SetConsoleCtrlHandler(handler, false) catch unreachable;
 
-            var buf: [128]anyframe = undefined;
-            var len: usize = 0;
-
-            while (waker.wake(&lock, @bitCast(SignalType, @as(MaskInt, math.maxInt(MaskInt))))) |data| : (len += 1) {
-                if (len == @sizeOf(@TypeOf(buf))) break;
-                buf[len] = data.overlapped.frame;
+            const held = lock.acquire();
+            while (waker.wake(@bitCast(SignalType, @as(MaskInt, math.maxInt(MaskInt))))) |node| {
+                pike.dispatch(&node.data.overlapped.task);
             }
-
-            for (buf[0..len]) |frame| pike.dispatch(frame);
+            held.release();
         }
     }
 
@@ -105,13 +119,33 @@ pub const Signal = struct {
     pub fn wait(self: *const Self) callconv(.Async) !void {
         if (self.port == windows.INVALID_HANDLE_VALUE) return error.NotRegistered;
 
-        defer if (waker.next(&lock, self.current_signal)) |data| pike.dispatch(data.overlapped.task);
+        {
+            const held = lock.acquire();
+            if (waker.wait(self.current_signal)) {
+                held.release();
+            } else {
+                var node = @TypeOf(waker).FrameNode{
+                    .data = Data{
+                        .port = self.port,
+                        .overlapped = pike.Overlapped.init(pike.Task.init(@frame())),
+                    },
+                };
 
-        var data = Data{
-            .port = self.port,
-            .overlapped = pike.Overlapped.init(undefined),
-        };
+                suspend {
+                    @TypeOf(waker).FrameList.append(&waker.heads, self.current_signal, &node);
+                    held.release();
+                }
+            }
+        }
 
-        waker.wait(&lock, self.current_signal, &data, &data.overlapped.frame);
+        {
+            const held = lock.acquire();
+            const next_node = waker.next(self.current_signal);
+            held.release();
+
+            if (next_node) |node| {
+                pike.dispatch(&node.data.overlapped.task);
+            }
+        }
     }
 };
