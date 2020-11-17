@@ -111,7 +111,11 @@ pub const Socket = struct {
         try notifier.register(&self.handle, .{ .read = true, .write = true });
     }
 
-    fn call(self: *Self, comptime function: anytype, raw_args: anytype, comptime opts: pike.CallOptions) callconv(.Async) !pike.Overlapped {
+    fn ErrorUnionOf(comptime func: anytype) std.builtin.TypeInfo.ErrorUnion {
+        return @typeInfo(@typeInfo(@TypeOf(func)).Fn.return_type.?).ErrorUnion;
+    }
+
+    fn call(self: *Self, comptime function: anytype, raw_args: anytype, comptime opts: pike.CallOptions) callconv(.Async) (ErrorUnionOf(function).error_set || error{OperationCancelled})!pike.Overlapped {
         var overlapped = pike.Overlapped.init(pike.Task.init(@frame()));
         var args = raw_args;
 
