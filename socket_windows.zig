@@ -126,12 +126,19 @@ pub const Socket = struct {
             }
         }
 
-        @call(.{ .modifier = .always_inline }, function, args) catch |err| switch (err) {
-            error.WouldBlock => {
-                suspend;
-            },
-            else => return err,
-        };
+        var err_ptr: ?ErrorUnionOf(function).error_set = null;
+
+        suspend {
+            @call(.{ .modifier = .always_inline }, function, args) catch |err| switch (err) {
+                error.WouldBlock => {},
+                else => {
+                    err_ptr = err;
+                    pike.dispatch(&overlapped.task, .{});
+                },
+            };
+        }
+
+        if (err_ptr) |err| return err;
 
         return overlapped;
     }
