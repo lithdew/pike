@@ -129,13 +129,14 @@ pub const Socket = struct {
         var err_ptr: ?ErrorUnionOf(function).error_set = null;
 
         suspend {
-            @call(.{ .modifier = .always_inline }, function, args) catch |err| switch (err) {
-                error.WouldBlock => {},
-                else => {
-                    err_ptr = err;
-                    pike.dispatch(&overlapped.task, .{});
-                },
-            };
+            var would_block = false;
+
+            if (@call(.{ .modifier = .always_inline }, function, args)) |_| {} else |err| switch (err) {
+                error.WouldBlock => would_block = true,
+                else => err_ptr = err,
+            }
+
+            if (!would_block) resume @frame();
         }
 
         if (err_ptr) |err| return err;
