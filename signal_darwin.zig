@@ -93,12 +93,12 @@ pub const Signal = struct {
         try notifier.register(&self.handle, .{ .read = true });
     }
 
-    inline fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
+    inline fn wake(handle: *pike.Handle, batch: *pike.Batch, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
 
         if (opts.write_ready) @panic("pike/signal (linux): signalfd unexpectedly reported write-readiness");
-        if (opts.read_ready) if (self.readers.notify()) |task| pike.dispatch(task, .{});
-        if (opts.shutdown) if (self.readers.shutdown()) |task| pike.dispatch(task, .{});
+        if (opts.read_ready) if (self.readers.notify()) |task| batch.push(task);
+        if (opts.shutdown) if (self.readers.shutdown()) |task| batch.push(task);
     }
 
     pub fn wait(self: *Self) callconv(.Async) !void {

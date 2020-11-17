@@ -12,10 +12,10 @@ pub inline fn deinit() void {}
 
 pub const Handle = struct {
     inner: os.fd_t,
-    wake_fn: fn (self: *Handle, opts: pike.WakeOptions) void,
+    wake_fn: fn (self: *Handle, batch: *pike.Batch, opts: pike.WakeOptions) void,
 
-    pub inline fn wake(self: *Handle, opts: pike.WakeOptions) void {
-        self.wake_fn(self, opts);
+    pub inline fn wake(self: *Handle, batch: *pike.Batch, opts: pike.WakeOptions) void {
+        self.wake_fn(self, batch, opts);
     }
 };
 
@@ -74,6 +74,9 @@ pub const Notifier = struct {
     pub fn poll(self: *const Self, timeout: i32) !void {
         var events: [128]os.Kevent = undefined;
 
+        var batch: pike.Batch = .{};
+        defer pike.dispatch(batch, .{});
+
         const timeout_spec = os.timespec{
             .tv_sec = @divTrunc(timeout, time.ms_per_s),
             .tv_nsec = @rem(timeout, time.ms_per_s) * time.ns_per_ms,
@@ -90,7 +93,11 @@ pub const Notifier = struct {
             const read_ready = e.filter == os.EVFILT_READ;
             const write_ready = e.filter == os.EVFILT_WRITE;
 
-            handle.wake(.{ .shutdown = true, .read_ready = read_ready, .write_ready = write_ready });
+            handle.wake(&batch, .{
+                .shutdown = true,
+                .read_ready = read_ready,
+                .write_ready = write_ready,
+            });
         }
     }
 };

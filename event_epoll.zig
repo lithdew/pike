@@ -36,14 +36,14 @@ pub const Event = struct {
         try notifier.register(&self.handle, .{ .read = true, .write = true });
     }
 
-    inline fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
+    inline fn wake(handle: *pike.Handle, batch: *pike.Batch, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
 
-        if (opts.write_ready) if (self.writers.notify()) |task| pike.dispatch(task, .{});
-        if (opts.read_ready) if (self.readers.notify()) |task| pike.dispatch(task, .{});
+        if (opts.write_ready) if (self.writers.notify()) |task| batch.push(task);
+        if (opts.read_ready) if (self.readers.notify()) |task| batch.push(task);
         if (opts.shutdown) {
-            if (self.writers.shutdown()) |task| pike.dispatch(task, .{});
-            if (self.readers.shutdown()) |task| pike.dispatch(task, .{});
+            if (self.writers.shutdown()) |task| batch.push(task);
+            if (self.readers.shutdown()) |task| batch.push(task);
         }
     }
 

@@ -29,6 +29,7 @@ pub const Task = if (@hasDecl(root, "pike_task"))
     root.pike_task
 else
     struct {
+        next: ?*Task = null,
         frame: anyframe,
 
         pub inline fn init(frame: anyframe) Task {
@@ -36,12 +37,59 @@ else
         }
     };
 
-pub const dispatch: fn (*Task, anytype) void = if (@hasDecl(root, "pike_dispatch"))
+pub const Batch = if (@hasDecl(root, "pike_batch"))
+    root.pike_batch
+else
+    struct {
+        head: ?*Task = null,
+        tail: *Task = undefined,
+
+        pub fn from(batchable: anytype) Batch {
+            if (@TypeOf(batchable) == Batch)
+                return batchable;
+
+            if (@TypeOf(batchable) == *Task) {
+                batchable.next = null;
+                return Batch{
+                    .head = batchable,
+                    .tail = batchable,
+                };
+            }
+
+            if (@TypeOf(batchable) == ?*Task) {
+                const task: *Task = batchable orelse return Batch{};
+                return Batch.from(task);
+            }
+
+            @compileError(@typeName(@TypeOf(batchable)) ++ " cannot be converted into a " ++ @typeName(Batch));
+        }
+
+        pub fn push(self: *Batch, entity: anytype) void {
+            const other = Batch.from(entity);
+            if (self.head == null) {
+                self.* = other;
+            } else {
+                self.tail.next = other.head;
+                self.tail = other.tail;
+            }
+        }
+
+        pub fn pop(self: *Batch) ?*Task {
+            const task = self.head orelse return null;
+            self.head = task.next;
+            return task;
+        }
+    };
+
+pub const dispatch: fn (anytype, anytype) void = if (@hasDecl(root, "pike_dispatch"))
     root.pike_dispatch
 else
     struct {
-        inline fn default(task: *Task, args: anytype) void {
-            resume task.frame;
+        inline fn default(batchable: anytype, args: anytype) void {
+            var batch = Batch.from(batchable);
+            while (batch.pop()) |task| {
+                resume task.frame;
+            }
         }
     }.default;
 
