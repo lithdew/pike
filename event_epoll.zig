@@ -26,10 +26,7 @@ pub const Event = struct {
         os.close(self.handle.inner);
 
         if (self.writers.shutdown()) |task| pike.dispatch(task, .{});
-        while (true) self.writers.wait() catch break;
-
         if (self.readers.shutdown()) |task| pike.dispatch(task, .{});
-        while (true) self.readers.wait() catch break;
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
@@ -56,9 +53,9 @@ pub const Event = struct {
             const result = @call(.{ .modifier = .always_inline }, function, args) catch |err| switch (err) {
                 error.WouldBlock => {
                     if (comptime opts.write) {
-                        try self.writers.wait();
+                        try self.writers.wait(.{ .use_lifo = true });
                     } else if (comptime opts.read) {
-                        try self.readers.wait();
+                        try self.readers.wait(.{});
                     }
                     continue;
                 },

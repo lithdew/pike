@@ -50,7 +50,6 @@ pub const Signal = struct {
         posix.sigprocmask(os.SIG_SETMASK, &self.prev, null) catch {};
 
         if (self.readers.shutdown()) |task| pike.dispatch(task, .{});
-        while (true) self.readers.wait() catch break;
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
@@ -71,7 +70,7 @@ pub const Signal = struct {
         while (true) {
             const num_bytes = os.read(self.handle.inner, mem.asBytes(&info)) catch |err| switch (err) {
                 error.WouldBlock => {
-                    try self.readers.wait();
+                    try self.readers.wait(.{});
                     continue;
                 },
                 else => return err,

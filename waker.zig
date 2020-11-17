@@ -20,7 +20,7 @@ pub const Waker = struct {
         task: pike.Task,
     };
 
-    pub fn wait(self: *Waker) !void {
+    pub fn wait(self: *Waker, args: anytype) !void {
         var node: Node = .{ .task = pike.Task.init(@frame()) };
 
         suspend {
@@ -32,14 +32,21 @@ pub const Waker = struct {
                     NOTIFIED => EMPTY,
                     SHUTDOWN => {
                         node.dead = true;
-                        pike.dispatch(&node.task, .{});
+                        pike.dispatch(&node.task, .{ .use_lifo = true });
                         break;
                     },
                     else => unreachable,
                 };
 
-                state = @cmpxchgWeak(usize, &self.state, state, new_state, .Release, .Monotonic) orelse {
-                    if (new_state == EMPTY) pike.dispatch(&node.task, .{});
+                state = @cmpxchgWeak(
+                    usize,
+                    &self.state,
+                    state,
+                    new_state,
+                    .Release,
+                    .Monotonic,
+                ) orelse {
+                    if (new_state == EMPTY) pike.dispatch(&node.task, args);
                     break;
                 };
             }
@@ -82,14 +89,14 @@ test "Waker.wait() / Waker.notify() / Waker.shutdown()" {
     var waker: Waker = .{};
 
     {
-        var frame = async waker.wait();
+        var frame = async waker.wait(.{});
         pike.dispatch(waker.notify().?, .{});
         try nosuspend await frame;
     }
 
     {
         testing.expect(waker.shutdown() == null);
-        testing.expectError(error.OperationCancelled, nosuspend waker.wait());
+        testing.expectError(error.OperationCancelled, nosuspend waker.wait(.{}));
     }
 }
 
