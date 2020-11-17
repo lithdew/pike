@@ -7,8 +7,6 @@ const net = std.net;
 const mem = std.mem;
 const time = std.time;
 
-usingnamespace @import("waker.zig");
-
 pub inline fn init() !void {}
 pub inline fn deinit() void {}
 
@@ -88,16 +86,11 @@ pub const Notifier = struct {
 
             const handle = @intToPtr(*Handle, e.udata);
 
-            const err = e.flags & os.EV_ERROR != 0;
-            const eof = e.flags & os.EV_EOF != 0;
+            const shutdown = e.flags & (os.EV_ERROR | os.EV_EOF) != 0;
+            const read_ready = e.filter == os.EVFILT_READ;
+            const write_ready = e.filter == os.EVFILT_WRITE;
 
-            const readable = (err or eof) or e.filter == os.EVFILT_READ;
-            const writable = (err or eof) or e.filter == os.EVFILT_WRITE;
-
-            const read_ready = (err or eof) or readable;
-            const write_ready = (err or eof) or writable;
-
-            handle.wake(.{ .read_ready = read_ready, .write_ready = write_ready });
+            handle.wake(.{ .shutdown = true, .read_ready = read_ready, .write_ready = write_ready });
         }
     }
 };

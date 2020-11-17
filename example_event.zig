@@ -11,7 +11,7 @@ pub fn main() !void {
     defer notifier.deinit();
 
     var event = try pike.Event.init();
-    defer event.deinit();
+    defer nosuspend event.deinit();
 
     try event.registerTo(&notifier);
 

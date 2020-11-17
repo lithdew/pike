@@ -79,7 +79,7 @@ pub const Notifier = struct {
 
         for (events[0..num_events]) |event| {
             const overlapped = @fieldParentPtr(Overlapped, "inner", event.lpOverlapped orelse continue);
-            pike.dispatch(&overlapped.task);
+            pike.dispatch(&overlapped.task, .{});
         }
     }
 };

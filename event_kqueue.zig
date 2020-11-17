@@ -3,8 +3,6 @@ const pike = @import("pike.zig");
 
 const os = std.os;
 
-usingnamespace @import("waker.zig");
-
 pub const Event = struct {
     const Self = @This();
 

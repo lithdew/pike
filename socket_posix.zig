@@ -72,8 +72,6 @@ pub const Socket = struct {
     const Self = @This();
 
     handle: pike.Handle,
-
-    lock: std.Mutex = .{},
     readers: Waker = .{},
     writers: Waker = .{},
 
@@ -95,24 +93,11 @@ pub const Socket = struct {
 
         os.close(self.handle.inner);
 
-        var head: ?*Waker.Node = null;
+        if (self.writers.shutdown()) |task| pike.dispatch(task, .{});
+        while (true) self.writers.wait() catch break;
 
-        const held = self.lock.acquire();
-        while (self.readers.wake()) |node| {
-            node.next = head;
-            node.prev = null;
-            head = node;
-        }
-        while (self.writers.wake()) |node| {
-            node.next = head;
-            node.prev = null;
-            head = node;
-        }
-        held.release();
-
-        while (head) |node| : (head = node.next) {
-            pike.dispatch(&node.data);
-        }
+        if (self.readers.shutdown()) |task| pike.dispatch(task, .{});
+        while (true) self.readers.wait() catch break;
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
@@ -122,33 +107,31 @@ pub const Socket = struct {
     inline fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
 
-        const held = self.lock.acquire();
-        const read_node = if (opts.read_ready) self.readers.wake() else null;
-        const write_node = if (opts.write_ready) self.writers.wake() else null;
-        held.release();
-
-        if (read_node) |node| pike.dispatch(&node.data);
-        if (write_node) |node| pike.dispatch(&node.data);
+        if (opts.write_ready) if (self.writers.notify()) |task| pike.dispatch(task, .{});
+        if (opts.read_ready) if (self.readers.notify()) |task| pike.dispatch(task, .{});
+        if (opts.shutdown) {
+            if (self.writers.shutdown()) |task| pike.dispatch(task, .{});
+            if (self.readers.shutdown()) |task| pike.dispatch(task, .{});
+        }
     }
 
-    fn call(self: *Self, comptime function: anytype, args: anytype, comptime opts: pike.CallOptions) callconv(.Async) @typeInfo(@TypeOf(function)).Fn.return_type.? {
+    fn ErrorUnionOf(comptime func: anytype) std.builtin.TypeInfo.ErrorUnion {
+        return @typeInfo(@typeInfo(@TypeOf(func)).Fn.return_type.?).ErrorUnion;
+    }
+
+    inline fn call(self: *Self, comptime function: anytype, args: anytype, comptime opts: pike.CallOptions) !ErrorUnionOf(function).payload {
         while (true) {
             const result = @call(.{ .modifier = .always_inline }, function, args) catch |err| switch (err) {
                 error.WouldBlock => {
-                    if (comptime opts.read) self.readers.wait(&self.lock);
-                    if (comptime opts.write) self.writers.wait(&self.lock);
+                    if (comptime opts.write) {
+                        try self.writers.wait();
+                    } else if (comptime opts.read) {
+                        try self.readers.wait();
+                    }
                     continue;
                 },
                 else => return err,
             };
-
-            const held = self.lock.acquire();
-            const read_node = if (comptime opts.read) self.readers.next() else null;
-            const write_node = if (comptime opts.write) self.writers.next() else null;
-            held.release();
-
-            if (read_node) |node| pike.dispatch(&node.data);
-            if (write_node) |node| pike.dispatch(&node.data);
 
             return result;
         }
@@ -233,7 +216,10 @@ pub const Socket = struct {
 
     pub fn read(self: *Self, buf: []u8) !usize {
         const num_bytes = self.call(posix.read_, .{ self.handle.inner, buf }, .{ .read = true }) catch |err| switch (err) {
-            error.NotOpenForReading => return 0,
+            error.NotOpenForReading,
+            error.ConnectionResetByPeer,
+            error.OperationCancelled,
+            => return 0,
             else => return err,
         };
 

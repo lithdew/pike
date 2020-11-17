@@ -6,8 +6,6 @@ const os = std.os;
 const net = std.net;
 const mem = std.mem;
 
-usingnamespace @import("waker.zig");
-
 pub inline fn init() !void {}
 pub inline fn deinit() void {}
 
@@ -39,7 +37,7 @@ pub const Notifier = struct {
     pub fn register(self: *const Self, handle: *const Handle, comptime opts: pike.PollOptions) !void {
         if (handle.inner == -1) return;
 
-        var events: u32 = os.EPOLLET;
+        var events: u32 = os.EPOLLET | os.EPOLLERR | os.EPOLLHUP;
         if (opts.read) events |= os.EPOLLIN;
         if (opts.write) events |= os.EPOLLOUT;
 
@@ -58,10 +56,11 @@ pub const Notifier = struct {
 
             const handle = @intToPtr(*Handle, e.data.ptr);
 
-            const read_ready = (e.events & os.EPOLLERR != 0 or e.events & os.EPOLLHUP != 0) or e.events & os.EPOLLIN != 0;
-            const write_ready = (e.events & os.EPOLLERR != 0 or e.events & os.EPOLLHUP != 0) or e.events & os.EPOLLOUT != 0;
+            const shutdown = e.events & (os.EPOLLERR | os.EPOLLHUP) != 0;
+            const read_ready = e.events & os.EPOLLIN != 0;
+            const write_ready = e.events & os.EPOLLOUT != 0;
 
-            handle.wake(.{ .read_ready = read_ready, .write_ready = write_ready });
+            handle.wake(.{ .shutdown = shutdown, .read_ready = read_ready, .write_ready = write_ready });
         }
     }
 };

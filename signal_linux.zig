@@ -3,7 +3,7 @@ const pike = @import("pike.zig");
 const posix = @import("os/posix.zig");
 
 const os = std.os;
-const system = os.system;
+const linux = os.linux;
 
 const mem = std.mem;
 
@@ -20,17 +20,16 @@ pub const Signal = struct {
     const Self = @This();
 
     handle: pike.Handle,
-    prev: os.sigset_t,
-
-    lock: std.Mutex = .{},
     readers: Waker = .{},
+
+    prev: os.sigset_t,
 
     pub fn init(signal: SignalType) !Self {
         var set = mem.zeroes(os.sigset_t);
-        if (signal.terminate) system.sigaddset(&set, os.SIGTERM);
-        if (signal.interrupt) system.sigaddset(&set, os.SIGINT);
-        if (signal.quit) system.sigaddset(&set, os.SIGQUIT);
-        if (signal.hup) system.sigaddset(&set, os.SIGHUP);
+        if (signal.terminate) linux.sigaddset(&set, os.SIGTERM);
+        if (signal.interrupt) linux.sigaddset(&set, os.SIGINT);
+        if (signal.quit) linux.sigaddset(&set, os.SIGQUIT);
+        if (signal.hup) linux.sigaddset(&set, os.SIGHUP);
 
         var prev = mem.zeroes(os.sigset_t);
 
@@ -50,19 +49,8 @@ pub const Signal = struct {
         os.close(self.handle.inner);
         posix.sigprocmask(os.SIG_SETMASK, &self.prev, null) catch {};
 
-        var head: ?*Waker.Node = null;
-
-        const held = self.lock.acquire();
-        while (self.readers.wake()) |node| {
-            node.next = head;
-            node.prev = null;
-            head = node;
-        }
-        held.release();
-
-        while (head) |node| : (head = node.next) {
-            pike.dispatch(&node.data);
-        }
+        if (self.readers.shutdown()) |task| pike.dispatch(task, .{});
+        while (true) self.readers.wait() catch break;
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
@@ -73,12 +61,8 @@ pub const Signal = struct {
         const self = @fieldParentPtr(Self, "handle", handle);
 
         if (opts.write_ready) @panic("pike/signal (linux): signalfd unexpectedly reported write-readiness");
-
-        const held = self.lock.acquire();
-        const read_node = if (opts.read_ready) self.readers.wake() else null;
-        held.release();
-
-        if (read_node) |node| pike.dispatch(&node.data);
+        if (opts.read_ready) if (self.readers.notify()) |task| pike.dispatch(task, .{});
+        if (opts.shutdown) if (self.readers.shutdown()) |task| pike.dispatch(task, .{});
     }
 
     pub fn wait(self: *Self) callconv(.Async) !void {
@@ -87,21 +71,14 @@ pub const Signal = struct {
         while (true) {
             const num_bytes = os.read(self.handle.inner, mem.asBytes(&info)) catch |err| switch (err) {
                 error.WouldBlock => {
-                    self.readers.wait(&self.lock);
+                    try self.readers.wait();
                     continue;
                 },
                 else => return err,
             };
-
             if (num_bytes != @sizeOf(@TypeOf(info))) {
                 return error.ShortRead;
             }
-
-            const held = self.lock.acquire();
-            const read_node = self.readers.next();
-            held.release();
-
-            if (read_node) |node| pike.dispatch(&node.data);
 
             return;
         }

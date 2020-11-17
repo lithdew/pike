@@ -15,6 +15,7 @@ pub const CallOptions = packed struct {
 };
 
 pub const WakeOptions = packed struct {
+    shutdown: bool = false,
     read_ready: bool = false,
     write_ready: bool = false,
 };
@@ -35,11 +36,11 @@ else
         }
     };
 
-pub const dispatch: fn (*Task) void = if (@hasDecl(root, "pike_dispatch"))
+pub const dispatch: fn (*Task, anytype) void = if (@hasDecl(root, "pike_dispatch"))
     root.pike_dispatch
 else
     struct {
-        inline fn default(task: *Task) void {
+        inline fn default(task: *Task, args: anytype) void {
             resume task.frame;
         }
     }.default;

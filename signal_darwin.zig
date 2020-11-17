@@ -20,10 +20,9 @@ pub const Signal = struct {
     const Self = @This();
 
     handle: pike.Handle,
-    prev: os.sigset_t,
-
-    lock: std.Mutex = .{},
     readers: Waker = .{},
+
+    prev: os.sigset_t,
 
     pub fn init(signal: SignalType) !Self {
         const handle = try os.kqueue();
@@ -86,19 +85,8 @@ pub const Signal = struct {
         os.close(self.handle.inner);
         posix.sigprocmask(os.SIG_SETMASK, &self.prev, null) catch {};
 
-        var head: ?*Waker.Node = null;
-
-        const held = self.lock.acquire();
-        while (self.readers.wake()) |node| {
-            node.next = head;
-            node.prev = null;
-            head = node;
-        }
-        held.release();
-
-        while (head) |node| : (head = node.next) {
-            pike.dispatch(&node.data);
-        }
+        if (self.readers.shutdown()) |task| pike.dispatch(task, .{});
+        while (true) self.readers.wait() catch break;
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
@@ -108,13 +96,9 @@ pub const Signal = struct {
     inline fn wake(handle: *pike.Handle, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
 
-        if (opts.write_ready) @panic("pike/signal (linux): kqueue unexpectedly reported write-readiness");
-
-        const held = self.lock.acquire();
-        const read_node = if (opts.read_ready) self.readers.wake() else null;
-        held.release();
-
-        if (read_node) |node| pike.dispatch(&node.data);
+        if (opts.write_ready) @panic("pike/signal (linux): signalfd unexpectedly reported write-readiness");
+        if (opts.read_ready) if (self.readers.notify()) |task| pike.dispatch(task, .{});
+        if (opts.shutdown) if (self.readers.shutdown()) |task| pike.dispatch(task, .{});
     }
 
     pub fn wait(self: *Self) callconv(.Async) !void {
@@ -130,16 +114,10 @@ pub const Signal = struct {
 
             switch (num_events) {
                 0 => {
-                    self.readers.wait(&self.lock);
+                    try self.readers.wait();
                     continue;
                 },
-                1 => {
-                    const held = self.lock.acquire();
-                    const read_node = self.readers.next();
-                    held.release();
-
-                    if (read_node) |node| pike.dispatch(&node.data);
-                },
+                1 => return,
                 else => return error.ShortRead,
             }
         }

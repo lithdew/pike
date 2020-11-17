@@ -8,190 +8,88 @@ const testing = std.testing;
 
 const assert = std.debug.assert;
 
-pub const Waker = packed struct {
-    pub const Node = List(pike.Task).Node;
+pub const Waker = struct {
+    const EMPTY = 0;
+    const NOTIFIED: usize = 1;
+    const SHUTDOWN: usize = 2;
 
-    const Address = meta.Int(.unsigned, meta.bitCount(usize) - 1);
-    const Self = @This();
+    state: usize = EMPTY,
 
-    ready: bool = false,
-    pointer: Address = @ptrToInt(@as(?*Node, null)),
+    pub const Node = struct {
+        dead: bool = false,
+        task: pike.Task,
+    };
 
-    fn append(self: *Self, node: *Node) void {
-        var pointer = @intToPtr(?*Node, @intCast(usize, self.pointer) << 1);
-        defer self.pointer = @truncate(Address, @ptrToInt(pointer) >> 1);
-
-        List(pike.Task).append(&pointer, node);
-    }
-
-    fn prepend(self: *Self, node: *Node) void {
-        var pointer = @intToPtr(?*Node, @intCast(usize, self.pointer) << 1);
-        defer self.pointer = @truncate(Address, @ptrToInt(pointer) >> 1);
-
-        List(pike.Task).prepend(&pointer, node);
-    }
-
-    fn pop(self: *Self) ?*Node {
-        var pointer = @intToPtr(?*Node, @intCast(usize, self.pointer) << 1);
-        defer self.pointer = @truncate(Address, @ptrToInt(pointer) >> 1);
-
-        return List(pike.Task).pop(&pointer);
-    }
-
-    pub fn wait(self: *Self, lock: *std.Mutex) callconv(.Async) void {
-        const held = lock.acquire();
-
-        if (self.ready) {
-            self.ready = false;
-            held.release();
-            return;
-        }
-
-        var node = Node{ .data = pike.Task.init(@frame()) };
+    pub fn wait(self: *Waker) !void {
+        var node: Node = .{ .task = pike.Task.init(@frame()) };
 
         suspend {
-            self.append(&node);
-            held.release();
+            var state = @atomicLoad(usize, &self.state, .Monotonic);
+
+            while (true) {
+                const new_state = switch (state) {
+                    EMPTY => @ptrToInt(&node),
+                    NOTIFIED => EMPTY,
+                    SHUTDOWN => {
+                        node.dead = true;
+                        pike.dispatch(&node.task, .{});
+                        break;
+                    },
+                    else => unreachable,
+                };
+
+                state = @cmpxchgWeak(usize, &self.state, state, new_state, .Release, .Monotonic) orelse {
+                    if (new_state == EMPTY) pike.dispatch(&node.task, .{});
+                    break;
+                };
+            }
+        }
+
+        if (node.dead) return error.OperationCancelled;
+    }
+
+    pub fn notify(self: *Waker) ?*pike.Task {
+        var state = @atomicLoad(usize, &self.state, .Monotonic);
+
+        while (true) {
+            const new_state = switch (state) {
+                EMPTY => NOTIFIED,
+                NOTIFIED, SHUTDOWN => return null,
+                else => EMPTY,
+            };
+
+            state = @cmpxchgWeak(usize, &self.state, state, new_state, .Acquire, .Monotonic) orelse {
+                if (new_state == NOTIFIED) return null;
+                const node = @intToPtr(*Node, state);
+                return &node.task;
+            };
         }
     }
 
-    pub fn wake(self: *Self) ?*Node {
-        if (self.ready) return null;
-
-        if (self.pointer == @ptrToInt(@as(?*Node, null))) {
-            self.ready = true;
-            return null;
-        }
-
-        return self.pop();
-    }
-
-    pub fn next(self: *Self) ?*Node {
-        if (self.ready or self.pointer == @ptrToInt(@as(?*Node, null))) {
-            return null;
-        }
-
-        return self.pop();
+    pub fn shutdown(self: *Waker) ?*pike.Task {
+        return switch (@atomicRmw(usize, &self.state, .Xchg, SHUTDOWN, .AcqRel)) {
+            EMPTY, NOTIFIED, SHUTDOWN => null,
+            else => |state| {
+                const node = @intToPtr(*Node, state);
+                node.dead = true;
+                return &node.task;
+            },
+        };
     }
 };
 
-test "Waker.wake() / Waker.wait()" {
-    var lock: std.Mutex = .{};
+test "Waker.wait() / Waker.notify() / Waker.shutdown()" {
     var waker: Waker = .{};
 
-    testing.expect(waker.wake() == @as(?*Waker.Node, null));
-    testing.expect(waker.ready);
+    {
+        var frame = async waker.wait();
+        pike.dispatch(waker.notify().?, .{});
+        try nosuspend await frame;
+    }
 
-    nosuspend waker.wait(&lock);
-    testing.expect(!waker.ready);
-
-    var A = async waker.wait(&lock);
-    var B = async waker.wait(&lock);
-    var C = async waker.wait(&lock);
-
-    pike.dispatch(&waker.wake().?.data);
-    pike.dispatch(&waker.wake().?.data);
-    pike.dispatch(&waker.wake().?.data);
-
-    testing.expect(waker.wake() == @as(?*Waker.Node, null));
-    testing.expect(waker.ready);
-
-    nosuspend await A;
-    nosuspend await B;
-    nosuspend await C;
-}
-
-fn List(comptime T: type) type {
-    return struct {
-        const Self = @This();
-
-        pub const Node = struct {
-            data: T,
-            next: ?*Self.Node = null,
-            prev: ?*Self.Node = null,
-            tail: ?*Self.Node = null,
-        };
-
-        pub fn append(self: *?*Self.Node, node: *Self.Node) void {
-            assert(node.tail == null);
-            assert(node.prev == null);
-            assert(node.next == null);
-
-            if (self.*) |head| {
-                assert(head.prev == null);
-
-                const tail = head.tail orelse unreachable;
-
-                node.prev = tail;
-                tail.next = node;
-
-                head.tail = node;
-            } else {
-                node.tail = node;
-                self.* = node;
-            }
-        }
-
-        pub fn prepend(self: *?*Self.Node, node: *Self.Node) void {
-            assert(node.tail == null);
-            assert(node.prev == null);
-            assert(node.next == null);
-
-            if (self.*) |head| {
-                assert(head.prev == null);
-
-                node.tail = head.tail;
-                head.tail = null;
-
-                node.next = head;
-                head.prev = node;
-
-                self.* = node;
-            } else {
-                node.tail = node;
-                self.* = node;
-            }
-        }
-
-        pub fn pop(self: *?*Self.Node) ?*Self.Node {
-            if (self.*) |head| {
-                assert(head.prev == null);
-
-                self.* = head.next;
-                if (self.*) |next| {
-                    next.tail = head.tail;
-                    next.prev = null;
-                }
-
-                return head;
-            }
-
-            return null;
-        }
-    };
-}
-
-test "List.append() / List.prepend() / List.pop()" {
-    const U8List = List(u8);
-    const Node = U8List.Node;
-
-    var list: ?*Node = null;
-
-    var A = Node{ .data = 'A' };
-    var B = Node{ .data = 'B' };
-    var C = Node{ .data = 'C' };
-    var D = Node{ .data = 'D' };
-
-    U8List.append(&list, &C);
-    U8List.prepend(&list, &B);
-    U8List.append(&list, &D);
-    U8List.prepend(&list, &A);
-
-    const expected = "ABCD";
-
-    var i: usize = 0;
-    while (U8List.pop(&list)) |node| : (i += 1) {
-        testing.expectEqual(node.data, expected[i]);
+    {
+        testing.expect(waker.shutdown() == null);
+        testing.expectError(error.OperationCancelled, nosuspend waker.wait());
     }
 }
 

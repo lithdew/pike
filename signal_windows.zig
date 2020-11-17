@@ -106,7 +106,7 @@ pub const Signal = struct {
 
             const held = lock.acquire();
             while (waker.wake(@bitCast(SignalType, @as(MaskInt, math.maxInt(MaskInt))))) |node| {
-                pike.dispatch(&node.data.overlapped.task);
+                pike.dispatch(&node.data.overlapped.task, .{});
             }
             held.release();
         }
@@ -144,7 +144,7 @@ pub const Signal = struct {
             held.release();
 
             if (next_node) |node| {
-                pike.dispatch(&node.data.overlapped.task);
+                pike.dispatch(&node.data.overlapped.task, .{});
             }
         }
     }

@@ -2,8 +2,6 @@ const std = @import("std");
 const pike = @import("pike.zig");
 const windows = @import("os/windows.zig");
 
-usingnamespace @import("waker.zig");
-
 pub const Event = struct {
     const Self = @This();
 
