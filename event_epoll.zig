@@ -91,7 +91,8 @@ pub const Event = struct {
     }
 
     pub fn post(self: *Self) callconv(.Async) !void {
+        var frame = async self.read();
         try self.write(1);
-        try self.read();
+        try await frame;
     }
 };

@@ -99,7 +99,9 @@ pub const Server = struct {
 
         while (true) {
             var conn = self.socket.accept() catch |err| switch (err) {
-                error.SocketNotListening => return,
+                error.SocketNotListening,
+                error.OperationCancelled,
+                => return,
                 else => {
                     log.err("Server - socket.accept(): {}", .{@errorName(err)});
                     continue;
@@ -120,19 +122,24 @@ pub const Server = struct {
 };
 
 pub fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
-    defer stopped.* = true;
-
     // Setup allocator.
-
     var gpa: heap.GeneralPurposeAllocator(.{}) = .{};
     defer _ = gpa.deinit();
 
     // Setup signal handler.
 
+    var event = try pike.Event.init();
+    defer event.deinit();
+
+    try event.registerTo(notifier);
+
     var signal = try pike.Signal.init(.{ .interrupt = true });
     defer signal.deinit();
 
-    try signal.registerTo(notifier);
+    defer {
+        stopped.* = true;
+        event.post() catch unreachable;
+    }
 
     // Setup TCP server.
 
