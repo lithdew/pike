@@ -164,14 +164,12 @@ pub const Signal = struct {
                 held.release();
             }
 
-            {
-                const next_held = lock.acquire();
-                const next_node = waker.next(self.current);
-                next_held.release();
+            const next_held = lock.acquire();
+            const next_node = waker.next(self.current);
+            next_held.release();
 
-                if (next_node) |node| {
-                    pike.dispatch(&node.data, .{});
-                }
+            if (next_node) |node| {
+                pike.dispatch(&node.data, .{});
             }
         }
     }
