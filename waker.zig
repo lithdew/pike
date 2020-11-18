@@ -8,6 +8,139 @@ const testing = std.testing;
 
 const assert = std.debug.assert;
 
+pub fn WakerSet(comptime Set: type) type {
+    const Int = meta.Int(.unsigned, @bitSizeOf(Set));
+
+    return struct {
+        const Self = @This();
+
+        const EMPTY = 0;
+        const WAITING = 1;
+        const SHUTDOWN = 2;
+
+        state: usize = 0,
+
+        pub const Node = struct {
+            dead: bool = false,
+            signal: Int = 0,
+            task: pike.Task,
+        };
+
+        pub fn wait(self: *Self, set: Set, args: anytype) !Set {
+            var node: Node = .{ .task = pike.Task.init(@frame()) };
+
+            suspend {
+                var state = @atomicLoad(usize, &self.state, .Monotonic);
+
+                while (true) {
+                    const new_state = switch (state) {
+                        EMPTY => @ptrToInt(&node) | WAITING,
+                        SHUTDOWN => {
+                            node.dead = true;
+                            pike.dispatch(&node.task, .{ .use_lifo = true });
+                            break;
+                        },
+                        else => blk: {
+                            if (state & WAITING != 0) unreachable;
+                            node.signal = @bitCast(Int, set) & @intCast(Int, state >> 2);
+                            break :blk state & ~(@intCast(usize, @bitCast(Int, set)) << 2);
+                        },
+                    };
+
+                    state = @cmpxchgWeak(
+                        usize,
+                        &self.state,
+                        state,
+                        new_state,
+                        .Release,
+                        .Monotonic,
+                    ) orelse {
+                        if (state != EMPTY) pike.dispatch(&node.task, args);
+                        break;
+                    };
+                }
+            }
+
+            if (node.dead) return error.OperationCancelled;
+            return @bitCast(Set, node.signal);
+        }
+
+        pub fn notify(self: *Self, set: Set) ?*pike.Task {
+            var state = @atomicLoad(usize, &self.state, .Monotonic);
+
+            while (true) {
+                const new_state = switch (state) {
+                    SHUTDOWN => return null,
+                    else => blk: {
+                        if (state & WAITING != 0) break :blk EMPTY;
+                        break :blk state | (@intCast(usize, @bitCast(Int, set)) << 2);
+                    },
+                };
+
+                state = @cmpxchgWeak(usize, &self.state, state, new_state, .Acquire, .Monotonic) orelse {
+                    if (new_state != EMPTY) return null;
+                    const node = @intToPtr(*Node, state & ~@as(usize, 0b11));
+                    node.signal = @bitCast(Int, set);
+                    return &node.task;
+                };
+            }
+        }
+
+        pub fn shutdown(self: *Self) ?*pike.Task {
+            const state = @atomicRmw(usize, &self.state, .Xchg, SHUTDOWN, .AcqRel);
+            if (state & WAITING != 0) {
+                const node = @intToPtr(*Node, state & ~@as(usize, 0b11));
+                node.dead = true;
+                return &node.task;
+            }
+        }
+    };
+}
+
+test "WakerSet.wait() / WakerSet.notify() / WakerSet.shutdown()" {
+    const Set = packed struct {
+        a: bool = false,
+        b: bool = false,
+        c: bool = false,
+    };
+
+    var waker: WakerSet(Set) = .{};
+
+    { // Non-coalescing.
+        var frame = async waker.wait(.{ .b = true, .c = true }, .{});
+        pike.dispatch(waker.notify(.{ .a = true, .b = true }).?, .{});
+        testing.expectEqual(Set{ .a = true, .b = true }, try nosuspend await frame);
+    }
+
+    { // Coalescing.
+        testing.expect(waker.notify(.{ .a = true }) == null);
+        testing.expect(waker.notify(.{ .b = true, .c = true }) == null);
+
+        {
+            var frame = async waker.wait(.{ .b = true }, .{});
+            testing.expectEqual(Set{ .b = true }, try nosuspend await frame);
+        }
+
+        {
+            var frame = async waker.wait(.{ .c = true }, .{});
+            testing.expectEqual(Set{ .c = true }, try nosuspend await frame);
+        }
+
+        {
+            var frame = async waker.wait(.{ .a = true }, .{});
+            testing.expectEqual(Set{ .a = true }, try nosuspend await frame);
+        }
+
+        {
+            var frame = async waker.wait(.{ .b = true }, .{});
+            pike.dispatch(waker.notify(.{ .b = true }).?, .{});
+            testing.expectEqual(Set{ .b = true }, try nosuspend await frame);
+        }
+    }
+
+    {}
+}
+
 pub const Waker = struct {
     const EMPTY = 0;
     const NOTIFIED: usize = 1;
