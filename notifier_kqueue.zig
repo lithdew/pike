@@ -94,7 +94,7 @@ pub const Notifier = struct {
             const write_ready = e.filter == os.EVFILT_WRITE;
 
             handle.wake(&batch, .{
-                .shutdown = true,
+                .shutdown = shutdown,
                 .read_ready = read_ready,
                 .write_ready = write_ready,
             });
