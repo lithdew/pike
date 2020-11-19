@@ -85,8 +85,6 @@ pub const Notifier = struct {
         const num_events = try os.kevent(self.handle, &[0]os.Kevent{}, events[0..], &timeout_spec);
 
         for (events[0..num_events]) |e| {
-            if (e.udata == 0) continue;
-
             const handle = @intToPtr(*Handle, e.udata);
 
             const shutdown = e.flags & (os.EV_ERROR | os.EV_EOF) != 0;
