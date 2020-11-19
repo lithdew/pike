@@ -151,8 +151,6 @@ pub const Signal = struct {
         }
     }
 
-    pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {}
-
     pub fn wait(self: *Self) callconv(.Async) !void {
         const held = lock.acquire();
         if (waker.wait(self.current)) {

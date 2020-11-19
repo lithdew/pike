@@ -31,8 +31,6 @@ fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
     var signal = try pike.Signal.init(.{ .interrupt = true });
     defer signal.deinit();
 
-    try signal.registerTo(notifier);
-
     defer {
         stopped.* = true;
         event.post() catch unreachable;
