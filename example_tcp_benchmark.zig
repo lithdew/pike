@@ -82,7 +82,7 @@ fn runBenchmarkServer(notifier: *const pike.Notifier, address: net.Address, stop
     try socket.bind(address);
     try socket.listen(128);
 
-    log.info("Listening for clients on: {}", .{address});
+    log.info("Listening for clients on: {}", .{try socket.getBindAddress()});
 
     var client = try socket.accept();
     defer client.socket.deinit();

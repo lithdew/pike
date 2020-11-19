@@ -186,6 +186,13 @@ pub const Socket = struct {
         );
     }
 
+    pub fn getBindAddress(self: *const Self) !net.Address {
+        var addr: os.sockaddr = undefined;
+        var addr_len: os.socklen_t = @sizeOf(@TypeOf(addr));
+        try os.getsockname(self.handle.inner, &addr, &addr_len);
+        return net.Address.initPosix(@alignCast(4, &addr));
+    }
+
     pub fn bind(self: *Self, address: net.Address) !void {
         try os.bind(self.handle.inner, &address.any, address.getOsSockLen());
     }

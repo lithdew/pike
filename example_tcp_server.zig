@@ -91,7 +91,7 @@ pub const Server = struct {
 
         self.frame = async self.run(notifier);
 
-        log.info("Listening for peers on: {}", .{address});
+        log.info("Listening for peers on: {}", .{try self.socket.getBindAddress()});
     }
 
     fn run(self: *Server, notifier: *const pike.Notifier) callconv(.Async) void {
@@ -149,7 +149,7 @@ pub fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
     // Start the server, and await for an interrupt signal to gracefully shutdown
     // the server.
 
-    try server.start(notifier, try net.Address.parseIp("0.0.0.0", 9000));
+    try server.start(notifier, net.Address.initIp4(.{ 0, 0, 0, 0 }, 0));
     try signal.wait();
 }
 
