@@ -12,10 +12,6 @@ const meta = std.meta;
 var OVERLAPPED = windows.OVERLAPPED{ .Internal = 0, .InternalHigh = 0, .Offset = 0, .OffsetHigh = 0, .hEvent = null };
 var OVERLAPPED_PARAM = &OVERLAPPED;
 
-fn UnionValueType(comptime Union: type, comptime Tag: anytype) type {
-    return meta.fieldInfo(Union, @tagName(Tag)).field_type;
-}
-
 pub const SocketOptionType = enum(u32) {
     debug = os.SO_DEBUG,
     listen = os.SO_ACCEPTCONN,
@@ -148,16 +144,16 @@ pub const Socket = struct {
         try windows.shutdown(@ptrCast(ws2_32.SOCKET, self.handle.inner), how);
     }
 
-    pub fn get(self: *const Self, comptime opt: SocketOptionType) !UnionValueType(SocketOption, opt) {
+    pub fn get(self: *const Self, comptime opt: SocketOptionType) !meta.TagPayloadType(SocketOption, opt) {
         return windows.getsockopt(
-            UnionValueType(SocketOption, opt),
+            meta.TagPayloadType(SocketOption, opt),
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             os.SOL_SOCKET,
             @enumToInt(opt),
         );
     }
 
-    pub fn set(self: *const Self, comptime opt: SocketOptionType, val: UnionValueType(SocketOption, opt)) !void {
+    pub fn set(self: *const Self, comptime opt: SocketOptionType, val: meta.TagPayloadType(SocketOption, opt)) !void {
         try windows.setsockopt(
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             os.SOL_SOCKET,

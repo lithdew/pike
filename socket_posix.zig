@@ -10,10 +10,6 @@ const meta = std.meta;
 
 usingnamespace @import("waker.zig");
 
-fn UnionValueType(comptime Union: type, comptime Tag: anytype) type {
-    return meta.fieldInfo(Union, @tagName(Tag)).field_type;
-}
-
 pub const SocketOptionType = enum(u32) {
     debug = os.SO_DEBUG,
     listen = os.SO_ACCEPTCONN,
@@ -138,16 +134,16 @@ pub const Socket = struct {
         try posix.shutdown(self.handle.inner, how);
     }
 
-    pub fn get(self: *const Self, comptime opt: SocketOptionType) !UnionValueType(SocketOption, opt) {
+    pub fn get(self: *const Self, comptime opt: SocketOptionType) !meta.TagPayloadType(SocketOption, opt) {
         return posix.getsockopt(
-            UnionValueType(SocketOption, opt),
+            meta.TagPayloadType(SocketOption, opt),
             self.handle.inner,
             os.SOL_SOCKET,
             @enumToInt(opt),
         );
     }
 
-    pub fn set(self: *const Self, comptime opt: SocketOptionType, value: UnionValueType(SocketOption, opt)) !void {
+    pub fn set(self: *const Self, comptime opt: SocketOptionType, value: meta.TagPayloadType(SocketOption, opt)) !void {
         const val = switch (@TypeOf(value)) {
             bool => @intCast(c_int, @boolToInt(value)),
             else => value,
@@ -159,9 +155,9 @@ pub const Socket = struct {
             @enumToInt(opt),
             blk: {
                 if (comptime @typeInfo(@TypeOf(val)) == .Optional) {
-                    break :blk if (val) |v| @as([]const u8, std.mem.asBytes(&v)[0..@sizeOf(@TypeOf(val))]) else &[0]u8{};
+                    break :blk if (val) |v| @as([]const u8, mem.asBytes(&v)[0..@sizeOf(@TypeOf(val))]) else &[0]u8{};
                 } else {
-                    break :blk @as([]const u8, std.mem.asBytes(&val)[0..@sizeOf(@TypeOf(val))]);
+                    break :blk @as([]const u8, mem.asBytes(&val)[0..@sizeOf(@TypeOf(val))]);
                 }
             },
         );
