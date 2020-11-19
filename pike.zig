@@ -15,6 +15,7 @@ pub const CallOptions = packed struct {
 };
 
 pub const WakeOptions = packed struct {
+    notify: bool = false,
     shutdown: bool = false,
     read_ready: bool = false,
     write_ready: bool = false,

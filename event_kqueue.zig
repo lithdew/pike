@@ -12,7 +12,7 @@ pub const Event = struct {
         .inner = -1,
         .wake_fn = wake,
     },
-    readers: Waker = .{},
+    waker: Waker = .{},
 
     inner: os.Kevent,
     notifier: os.fd_t,
@@ -45,7 +45,7 @@ pub const Event = struct {
             @panic("pike/event (darwin): unexpectedly registered new events while calling deinit()");
         }
 
-        if (self.readers.shutdown()) |task| pike.dispatch(task, .{});
+        if (self.waker.shutdown()) |task| pike.dispatch(task, .{});
     }
 
     pub fn registerTo(self: *Self, notifier: *const pike.Notifier) !void {
@@ -64,8 +64,9 @@ pub const Event = struct {
         const self = @fieldParentPtr(Self, "handle", handle);
 
         if (opts.write_ready) @panic("pike/event (darwin): kqueue unexpectedly reported write-readiness");
-        if (opts.read_ready) if (self.readers.notify()) |task| batch.push(task);
-        if (opts.shutdown) if (self.readers.shutdown()) |task| batch.push(task);
+        if (opts.read_ready) @panic("pike/event (darwin): kqueue unexpectedly reported read-readiness");
+        if (opts.notify) if (self.waker.notify()) |task| batch.push(task);
+        if (opts.shutdown) if (self.waker.shutdown()) |task| batch.push(task);
     }
 
     pub fn post(self: *Self) callconv(.Async) !void {
@@ -73,6 +74,6 @@ pub const Event = struct {
             return error.Unexpected;
         }
 
-        try self.readers.wait(.{});
+        try self.waker.wait(.{});
     }
 };

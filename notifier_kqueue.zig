@@ -87,11 +87,13 @@ pub const Notifier = struct {
         for (events[0..num_events]) |e| {
             const handle = @intToPtr(*Handle, e.udata);
 
+            const notify = e.filter == os.EVFILT_USER;
             const shutdown = e.flags & (os.EV_ERROR | os.EV_EOF) != 0;
             const read_ready = e.filter == os.EVFILT_READ;
             const write_ready = e.filter == os.EVFILT_WRITE;
 
             handle.wake(&batch, .{
+                .notify = notify,
                 .shutdown = shutdown,
                 .read_ready = read_ready,
                 .write_ready = write_ready,
