@@ -15,6 +15,7 @@ pub const CallOptions = packed struct {
 };
 
 pub const WakeOptions = packed struct {
+    notify: bool = false,
     shutdown: bool = false,
     read_ready: bool = false,
     write_ready: bool = false,
@@ -115,10 +116,8 @@ else
 
 // Export 'SignalType', and 'Signal'.
 
-pub usingnamespace if (builtin.os.tag == .linux)
-    @import("signal_linux.zig")
-else if (has_kqueue)
-    @import("signal_darwin.zig")
+pub usingnamespace if (has_epoll or has_kqueue)
+    @import("signal_posix.zig")
 else if (builtin.os.tag == .windows)
     @import("signal_windows.zig")
 else

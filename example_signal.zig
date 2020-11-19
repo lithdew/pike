@@ -23,12 +23,18 @@ pub fn main() !void {
 }
 
 fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
-    defer stopped.* = true;
+    var event = try pike.Event.init();
+    defer event.deinit();
+
+    try event.registerTo(notifier);
 
     var signal = try pike.Signal.init(.{ .interrupt = true });
     defer signal.deinit();
 
-    try signal.registerTo(notifier);
+    defer {
+        stopped.* = true;
+        event.post() catch unreachable;
+    }
 
     log.info("Press Ctrl+C.", .{});
 

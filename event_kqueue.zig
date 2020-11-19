@@ -3,8 +3,16 @@ const pike = @import("pike.zig");
 
 const os = std.os;
 
+usingnamespace @import("waker.zig");
+
 pub const Event = struct {
     const Self = @This();
+
+    handle: pike.Handle = .{
+        .inner = -1,
+        .wake_fn = wake,
+    },
+    waker: Waker = .{},
 
     inner: os.Kevent,
     notifier: os.fd_t,
@@ -36,10 +44,13 @@ pub const Event = struct {
         if ((os.kevent(self.notifier, @as(*const [1]os.Kevent, &self.inner), &[0]os.Kevent{}, null) catch unreachable) != 0) {
             @panic("pike/event (darwin): unexpectedly registered new events while calling deinit()");
         }
+
+        if (self.waker.shutdown()) |task| pike.dispatch(task, .{});
     }
 
     pub fn registerTo(self: *Self, notifier: *const pike.Notifier) !void {
         self.notifier = notifier.handle;
+        self.inner.udata = @ptrToInt(self);
 
         if ((try os.kevent(self.notifier, @as(*const [1]os.Kevent, &self.inner), &[0]os.Kevent{}, null)) != 0) {
             return error.Unexpected;
@@ -49,9 +60,20 @@ pub const Event = struct {
         self.inner.fflags = os.NOTE_TRIGGER;
     }
 
-    pub fn post(self: *const Self) callconv(.Async) !void {
+    inline fn wake(handle: *pike.Handle, batch: *pike.Batch, opts: pike.WakeOptions) void {
+        const self = @fieldParentPtr(Self, "handle", handle);
+
+        if (opts.write_ready) @panic("pike/event (darwin): kqueue unexpectedly reported write-readiness");
+        if (opts.read_ready) @panic("pike/event (darwin): kqueue unexpectedly reported read-readiness");
+        if (opts.notify) if (self.waker.notify()) |task| batch.push(task);
+        if (opts.shutdown) if (self.waker.shutdown()) |task| batch.push(task);
+    }
+
+    pub fn post(self: *Self) callconv(.Async) !void {
         if ((try os.kevent(self.notifier, @as(*const [1]os.Kevent, &self.inner), &[0]os.Kevent{}, null)) != 0) {
             return error.Unexpected;
         }
+
+        try self.waker.wait(.{});
     }
 };

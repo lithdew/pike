@@ -23,9 +23,8 @@ A minimal cross-platform high-performance async I/O library written in [Zig](htt
     - [x] EVFILT_SIGNAL for kqueue (darwin)
     - [x] SetConsoleCtrlHandler for i/o completion ports (windows)
 - [x] Async event support
-    - [x] eventfd for epoll (linux)
-    - [x] EVFILT_USER for kqueue (darwin)
-    - [x] i/o completion ports (windows)
+    - [x] sigaction (posix)
+    - [x] SetConsoleCtrlHandler (windows)
 
 ## Design
 

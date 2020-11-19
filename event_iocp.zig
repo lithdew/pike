@@ -18,6 +18,17 @@ pub const Event = struct {
     }
 
     pub fn post(self: *const Self) callconv(.Async) !void {
-        try windows.PostQueuedCompletionStatus(self.port, 0, 0, null);
+        var overlapped = pike.Overlapped.init(pike.Task.init(@frame()));
+
+        var err: ?windows.PostQueuedCompletionStatusError = null;
+
+        suspend {
+            windows.PostQueuedCompletionStatus(self.port, 0, 0, &overlapped.inner) catch |post_err| {
+                err = post_err;
+                pike.dispatch(&overlapped.task, .{});
+            };
+        }
+
+        if (err) |post_err| return post_err;
     }
 };

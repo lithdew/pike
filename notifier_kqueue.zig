@@ -85,16 +85,16 @@ pub const Notifier = struct {
         const num_events = try os.kevent(self.handle, &[0]os.Kevent{}, events[0..], &timeout_spec);
 
         for (events[0..num_events]) |e| {
-            if (e.udata == 0) continue;
-
             const handle = @intToPtr(*Handle, e.udata);
 
+            const notify = e.filter == os.EVFILT_USER;
             const shutdown = e.flags & (os.EV_ERROR | os.EV_EOF) != 0;
             const read_ready = e.filter == os.EVFILT_READ;
             const write_ready = e.filter == os.EVFILT_WRITE;
 
             handle.wake(&batch, .{
-                .shutdown = true,
+                .notify = notify,
+                .shutdown = shutdown,
                 .read_ready = read_ready,
                 .write_ready = write_ready,
             });
