@@ -122,20 +122,20 @@ pub const Socket = struct {
             }
         }
 
-        var err_ptr: ?ErrorUnionOf(function).error_set = null;
+        var err: ?ErrorUnionOf(function).error_set = null;
 
         suspend {
             var would_block = false;
 
-            if (@call(.{ .modifier = .always_inline }, function, args)) |_| {} else |err| switch (err) {
+            if (@call(.{ .modifier = .always_inline }, function, args)) |_| {} else |call_err| switch (call_err) {
                 error.WouldBlock => would_block = true,
-                else => err_ptr = err,
+                else => err = call_err,
             }
 
-            if (!would_block) resume @frame();
+            if (!would_block) pike.dispatch(&overlapped.task, .{ .use_lifo = true });
         }
 
-        if (err_ptr) |err| return err;
+        if (err) |call_err| return call_err;
 
         return overlapped;
     }

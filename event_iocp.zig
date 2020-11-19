@@ -25,7 +25,7 @@ pub const Event = struct {
         suspend {
             windows.PostQueuedCompletionStatus(self.port, 0, 0, &overlapped.inner) catch |post_err| {
                 err = post_err;
-                pike.dispatch(&overlapped.task, .{});
+                pike.dispatch(&overlapped.task, .{ .use_lifo = true });
             };
         }
 
