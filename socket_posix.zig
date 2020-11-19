@@ -52,7 +52,7 @@ pub const SocketOption = union(SocketOptionType) {
     send_timeout: u32, // Timeout specified in milliseconds.
     recv_timeout: u32, // Timeout specified in milliseconds.
 
-    socket_error: anyerror!void, // TODO
+    socket_error: void,
     socket_type: u32,
 };
 
@@ -135,6 +135,29 @@ pub const Socket = struct {
     }
 
     pub fn get(self: *const Self, comptime opt: SocketOptionType) !meta.TagPayloadType(SocketOption, opt) {
+        if (opt == .socket_error) {
+            const rc = try posix.getsockopt(u32, self.handle.inner, os.SOL_SOCKET, @enumToInt(opt));
+            return switch (os.errno(rc)) {
+                0 => {},
+                os.EACCES => error.PermissionDenied,
+                os.EPERM => error.PermissionDenied,
+                os.EADDRINUSE => error.AddressInUse,
+                os.EADDRNOTAVAIL => error.AddressNotAvailable,
+                os.EAFNOSUPPORT => error.AddressFamilyNotSupported,
+                os.EAGAIN => error.SystemResources,
+                os.EALREADY => error.AlreadyConnecting,
+                os.EBADF => error.BadFileDescriptor,
+                os.ECONNREFUSED => error.ConnectionRefused,
+                os.EFAULT => error.InvalidParameter,
+                os.EISCONN => error.AlreadyConnected,
+                os.ENETUNREACH => error.NetworkUnreachable,
+                os.ENOTSOCK => error.NotASocket,
+                os.EPROTOTYPE => error.UnsupportedProtocol,
+                os.ETIMEDOUT => error.ConnectionTimedOut,
+                else => |err| os.unexpectedErrno(err),
+            };
+        }
+
         return posix.getsockopt(
             meta.TagPayloadType(SocketOption, opt),
             self.handle.inner,
@@ -189,14 +212,12 @@ pub const Socket = struct {
     }
 
     pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {
-        self.call(
-            posix.connect_,
-            .{ self.handle.inner, &address.any, address.getOsSockLen() },
-            .{ .write = true },
-        ) catch |err| switch (err) {
-            error.AlreadyConnected => {},
+        posix.connect_(self.handle.inner, &address.any, address.getOsSockLen()) catch |err| switch (err) {
+            error.WouldBlock => try self.writers.wait(.{ .use_lifo = true }),
             else => return err,
         };
+
+        try self.get(.socket_error);
     }
 
     pub inline fn reader(self: *Self) Reader {

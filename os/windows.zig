@@ -346,30 +346,6 @@ pub fn shutdown(socket: ws2_32.SOCKET, how: c_int) !void {
     }
 }
 
-pub fn getsockoptError(handle: ws2_32.SOCKET) !void {
-    const errno = try getsockopt(u32, handle, ws2_32.SOL_SOCKET, ws2_32.SO_ERROR);
-
-    if (errno != 0) {
-        return switch (@intToEnum(ws2_32.WinsockError, @truncate(u16, errno))) {
-            .WSAEACCES => error.PermissionDenied,
-            .WSAEADDRINUSE => error.AddressInUse,
-            .WSAEADDRNOTAVAIL => error.AddressNotAvailable,
-            .WSAEAFNOSUPPORT => error.AddressFamilyNotSupported,
-            .WSAEALREADY => unreachable, // The socket is nonblocking and a previous connection attempt has not yet been completed.
-            .WSAEBADF => unreachable, // sockfd is not a valid open file descriptor.
-            .WSAECONNREFUSED => error.ConnectionRefused,
-            .WSAEFAULT => unreachable, // The socket structure address is outside the user's address space.
-            .WSAEISCONN => unreachable, // The socket is already connected.
-            .WSAENETUNREACH => error.NetworkUnreachable,
-            .WSAENOTSOCK => unreachable, // The file descriptor sockfd does not refer to a socket.
-            .WSAEPROTOTYPE => unreachable, // The socket type does not support the requested communications protocol.
-            .WSAETIMEDOUT => error.ConnectionTimedOut,
-            .WSAESHUTDOWN => error.AlreadyShutdown,
-            else => |err| unexpectedWSAError(err),
-        };
-    }
-}
-
 pub const SetSockOptError = error{
     /// The socket is already connected, and a specified option cannot be set while the socket is connected.
     AlreadyConnected,

@@ -60,7 +60,7 @@ pub const SocketOption = union(SocketOptionType) {
     send_timeout: u32, // Timeout specified in milliseconds.
     recv_timeout: u32, // Timeout specified in milliseconds.
 
-    socket_error: anyerror!void, // TODO
+    socket_error: void,
     socket_type: u32,
 
     protocol_info_a: ws2_32.WSAPROTOCOL_INFOA,
@@ -145,12 +145,35 @@ pub const Socket = struct {
     }
 
     pub fn get(self: *const Self, comptime opt: SocketOptionType) !meta.TagPayloadType(SocketOption, opt) {
-        return windows.getsockopt(
-            meta.TagPayloadType(SocketOption, opt),
-            @ptrCast(ws2_32.SOCKET, self.handle.inner),
-            os.SOL_SOCKET,
-            @enumToInt(opt),
-        );
+        if (opt == .socket_error) {
+            const errno = try windows.getsockopt(u32, @ptrCast(ws2_32.SOCKET, self.handle.inner), os.SOL_SOCKET, @enumToInt(opt));
+            if (errno != 0) {
+                return switch (@intToEnum(ws2_32.WinsockError, @truncate(u16, errno))) {
+                    .WSAEACCES => error.PermissionDenied,
+                    .WSAEADDRINUSE => error.AddressInUse,
+                    .WSAEADDRNOTAVAIL => error.AddressNotAvailable,
+                    .WSAEAFNOSUPPORT => error.AddressFamilyNotSupported,
+                    .WSAEALREADY => error.AlreadyConnecting,
+                    .WSAEBADF => error.BadFileDescriptor,
+                    .WSAECONNREFUSED => error.ConnectionRefused,
+                    .WSAEFAULT => error.InvalidParameter,
+                    .WSAEISCONN => error.AlreadyConnected,
+                    .WSAENETUNREACH => error.NetworkUnreachable,
+                    .WSAENOTSOCK => error.NotASocket,
+                    .WSAEPROTOTYPE => error.UnsupportedProtocol,
+                    .WSAETIMEDOUT => error.ConnectionTimedOut,
+                    .WSAESHUTDOWN => error.AlreadyShutdown,
+                    else => |err| windows.unexpectedWSAError(err),
+                };
+            }
+        } else {
+            return windows.getsockopt(
+                meta.TagPayloadType(SocketOption, opt),
+                @ptrCast(ws2_32.SOCKET, self.handle.inner),
+                os.SOL_SOCKET,
+                @enumToInt(opt),
+            );
+        }
     }
 
     pub fn set(self: *const Self, comptime opt: SocketOptionType, val: meta.TagPayloadType(SocketOption, opt)) !void {
@@ -233,8 +256,7 @@ pub const Socket = struct {
             OVERLAPPED_PARAM,
         }, .{});
 
-        try windows.getsockoptError(@ptrCast(ws2_32.SOCKET, self.handle.inner));
-
+        try self.get(.socket_error);
         try self.set(.update_connect_context, null);
     }
 

@@ -229,11 +229,11 @@ fn setSockFlags(sock: socket_t, flags: u32) !void {
     }
 }
 
-pub fn getsockopt(comptime T: type, handle: socket_t, level: c_int, opt: c_int) !T {
+pub fn getsockopt(comptime T: type, handle: socket_t, level: u32, opt: u32) !T {
     var val: T = undefined;
-    var val_len: c_int = @sizeOf(T);
+    var val_len: u32 = @sizeOf(T);
 
-    const rc = system.getsockopt(handle, level, opt, @ptrCast([*]u8, val), &val_len);
+    const rc = system.getsockopt(handle, level, opt, @ptrCast([*]u8, &val), &val_len);
     return switch (errno(rc)) {
         0 => val,
         EBADF => error.BadFileDescriptor, // The argument sockfd is not a valid file descriptor.
