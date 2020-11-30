@@ -136,8 +136,8 @@ pub const Socket = struct {
 
     pub fn get(self: *const Self, comptime opt: SocketOptionType) !meta.TagPayloadType(SocketOption, opt) {
         if (opt == .socket_error) {
-            const rc = try posix.getsockopt(u32, self.handle.inner, os.SOL_SOCKET, @enumToInt(opt));
-            return switch (os.errno(rc)) {
+            const errno = try posix.getsockopt(u32, self.handle.inner, os.SOL_SOCKET, @enumToInt(opt));
+            return switch (errno) {
                 0 => {},
                 os.EACCES => error.PermissionDenied,
                 os.EPERM => error.PermissionDenied,
