@@ -131,7 +131,7 @@ pub const Socket = struct {
     }
 
     pub fn shutdown(self: *const Self, how: c_int) !void {
-        try posix.shutdown(self.handle.inner, how);
+        try posix.shutdown_(self.handle.inner, how);
     }
 
     pub fn get(self: *const Self, comptime opt: SocketOptionType) !meta.TagPayloadType(SocketOption, opt) {

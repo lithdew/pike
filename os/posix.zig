@@ -23,7 +23,7 @@ const funcs = struct {
     pub extern "c" fn shutdown(sock: socket_t, how: c_int) c_int;
 };
 
-pub fn shutdown(sock: socket_t, how: c_int) !void {
+pub fn shutdown_(sock: socket_t, how: c_int) !void {
     const rc = if (builtin.link_libc) funcs.shutdown(sock, how) else system.shutdown(sock, @intCast(i32, how));
     return switch (errno(rc)) {
         0 => {},
