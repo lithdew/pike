@@ -37,7 +37,7 @@ pub const Notifier = struct {
     pub fn register(self: *const Self, handle: *const Handle, comptime opts: pike.PollOptions) !void {
         if (handle.inner == -1) return;
 
-        var events: u32 = os.EPOLLET | os.EPOLLERR | os.EPOLLHUP;
+        var events: u32 = os.EPOLLET | os.EPOLLERR | os.EPOLLRDHUP;
         if (opts.read) events |= os.EPOLLIN;
         if (opts.write) events |= os.EPOLLOUT;
 
@@ -59,7 +59,7 @@ pub const Notifier = struct {
 
             const handle = @intToPtr(*Handle, e.data.ptr);
 
-            const shutdown = e.events & (os.EPOLLERR | os.EPOLLHUP) != 0;
+            const shutdown = e.events & (os.EPOLLERR | os.EPOLLRDHUP) != 0;
             const read_ready = e.events & os.EPOLLIN != 0;
             const write_ready = e.events & os.EPOLLOUT != 0;
 
