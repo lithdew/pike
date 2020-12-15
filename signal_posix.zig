@@ -28,18 +28,11 @@ pub const SignalType = packed struct {
 };
 
 pub const Signal = struct {
-    const EMPTY_SIGACTION = if (comptime builtin.os.tag.isDarwin())
-        os.Sigaction{
-            .handler = @intToPtr(fn (c_int) callconv(.C) void, 1),
-            .sa_mask = mem.zeroes(os.sigset_t),
-            .sa_flags = 0,
-        }
-    else
-        os.Sigaction{
-            .sigaction = null,
-            .mask = mem.zeroes(os.sigset_t),
-            .flags = 0,
-        };
+    const EMPTY_SIGACTION = os.Sigaction{
+        .handler = .{ .handler = null },
+        .mask = mem.zeroes(os.sigset_t),
+        .flags = 0,
+    };
 
     const MaskInt = meta.Int(.unsigned, @bitSizeOf(SignalType));
     const Self = @This();
@@ -97,28 +90,17 @@ pub const Signal = struct {
         }
     }
 
-    fn linuxHandler(signal: i32, info: *os.siginfo_t, ctx: ?*c_void) callconv(.C) void {
-        handler(@intCast(c_int, signal));
-    }
-
     pub fn init(current: SignalType) !Self {
         const held = lock.acquire();
         defer held.release();
 
         const new_mask = @bitCast(SignalType, @bitCast(MaskInt, current) | @bitCast(MaskInt, mask));
 
-        const sigaction = if (comptime builtin.os.tag.isDarwin())
-            os.Sigaction{
-                .handler = handler,
-                .sa_mask = new_mask.toSet(),
-                .sa_flags = 0,
-            }
-        else
-            os.Sigaction{
-                .sigaction = linuxHandler,
-                .mask = new_mask.toSet(),
-                .flags = 0,
-            };
+        const sigaction = os.Sigaction{
+            .handler = .{ .handler = handler },
+            .mask = new_mask.toSet(),
+            .flags = 0,
+        };
 
         var previous = [_]os.Sigaction{EMPTY_SIGACTION} ** @bitSizeOf(SignalType);
 
