@@ -133,3 +133,7 @@ else if (builtin.os.tag == .windows)
     @import("event_iocp.zig")
 else
     @compileError("pike: unable to figure out a 'Event' implementation to use for the build target");
+
+// Export 'Waker' and 'PackedWaker'.
+
+pub usingnamespace @import("waker.zig");
