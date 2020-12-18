@@ -18,11 +18,14 @@ pub const SignalType = packed struct {
     hup: bool = false,
 
     fn toSet(self: SignalType) os.sigset_t {
+        const sigaddset = if (comptime std.Target.current.isDarwin()) system.sigaddset else os.linux.sigaddset;
+
         var set = mem.zeroes(os.sigset_t);
-        if (self.terminate) system.sigaddset(&set, os.SIGTERM);
-        if (self.interrupt) system.sigaddset(&set, os.SIGINT);
-        if (self.quit) system.sigaddset(&set, os.SIGQUIT);
-        if (self.hup) system.sigaddset(&set, os.SIGHUP);
+        if (self.terminate) sigaddset(&set, os.SIGTERM);
+        if (self.interrupt) sigaddset(&set, os.SIGINT);
+        if (self.quit) sigaddset(&set, os.SIGQUIT);
+        if (self.hup) sigaddset(&set, os.SIGHUP);
+
         return set;
     }
 };
