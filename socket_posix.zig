@@ -87,10 +87,10 @@ pub const Socket = struct {
     pub fn deinit(self: *Self) void {
         self.shutdown(posix.SHUT_RDWR) catch {};
 
-        os.close(self.handle.inner);
-
         if (self.writers.shutdown()) |task| pike.dispatch(task, .{});
         if (self.readers.shutdown()) |task| pike.dispatch(task, .{});
+
+        os.close(self.handle.inner);
     }
 
     pub fn registerTo(self: *const Self, notifier: *const pike.Notifier) !void {
