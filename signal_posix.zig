@@ -40,7 +40,7 @@ pub const Signal = struct {
     const MaskInt = meta.Int(.unsigned, @bitSizeOf(SignalType));
     const Self = @This();
 
-    var lock: std.Mutex = .{};
+    var lock: std.Thread.Mutex = .{};
     var mask: SignalType = .{};
     var waker: PackedWaker(pike.Task, SignalType) = .{};
 

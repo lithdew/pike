@@ -22,7 +22,7 @@ pub const Signal = struct {
     var refs: u64 = 0;
     var mask: u64 = 0;
 
-    var lock: std.Mutex = .{};
+    var lock: std.Thread.Mutex = .{};
     var waker: PackedWaker(pike.Task, SignalType) = .{};
 
     current_signal: SignalType,
