@@ -86,7 +86,7 @@ pub const dispatch: fn (anytype, anytype) void = if (@hasDecl(root, "pike_dispat
     root.pike_dispatch
 else
     struct {
-        inline fn default(batchable: anytype, args: anytype) void {
+        fn default(batchable: anytype, args: anytype) void {
             var batch = Batch.from(batchable);
             while (batch.pop()) |task| {
                 resume task.frame;

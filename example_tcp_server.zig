@@ -43,7 +43,7 @@ pub const Client = struct {
             if (num_bytes == 0) return;
 
             const message = mem.trim(u8, buf[0..num_bytes], " \t\r\n");
-            log.info("Peer {} said: {}", .{ self.address, message });
+            log.info("Peer {} said: {s}", .{ self.address, message });
         }
     }
 };
@@ -103,13 +103,13 @@ pub const Server = struct {
                 error.OperationCancelled,
                 => return,
                 else => {
-                    log.err("Server - socket.accept(): {}", .{@errorName(err)});
+                    log.err("Server - socket.accept(): {s}", .{@errorName(err)});
                     continue;
                 },
             };
 
             const client = self.allocator.create(Client) catch |err| {
-                log.err("Server - allocator.create(Client): {}", .{@errorName(err)});
+                log.err("Server - allocator.create(Client): {s}", .{@errorName(err)});
                 conn.socket.deinit();
                 continue;
             };

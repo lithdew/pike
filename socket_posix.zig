@@ -97,7 +97,7 @@ pub const Socket = struct {
         try notifier.register(&self.handle, .{ .read = true, .write = true });
     }
 
-    inline fn wake(handle: *pike.Handle, batch: *pike.Batch, opts: pike.WakeOptions) void {
+    fn wake(handle: *pike.Handle, batch: *pike.Batch, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
 
         if (opts.write_ready) if (self.writers.notify()) |task| batch.push(task);
@@ -112,7 +112,7 @@ pub const Socket = struct {
         return @typeInfo(@typeInfo(@TypeOf(func)).Fn.return_type.?).ErrorUnion;
     }
 
-    inline fn call(self: *Self, comptime function: anytype, args: anytype, comptime opts: pike.CallOptions) !ErrorUnionOf(function).payload {
+    fn call(self: *Self, comptime function: anytype, args: anytype, comptime opts: pike.CallOptions) !ErrorUnionOf(function).payload {
         while (true) {
             const result = @call(.{ .modifier = .always_inline }, function, args) catch |err| switch (err) {
                 error.WouldBlock => {
@@ -134,7 +134,7 @@ pub const Socket = struct {
         try posix.shutdown_(self.handle.inner, how);
     }
 
-    pub fn get(self: *const Self, comptime opt: SocketOptionType) !meta.TagPayloadType(SocketOption, opt) {
+    pub fn get(self: *const Self, comptime opt: SocketOptionType) !meta.TagPayload(SocketOption, opt) {
         if (opt == .socket_error) {
             const errno = try posix.getsockopt(u32, self.handle.inner, os.SOL_SOCKET, @enumToInt(opt));
             return switch (errno) {
@@ -159,14 +159,14 @@ pub const Socket = struct {
         }
 
         return posix.getsockopt(
-            meta.TagPayloadType(SocketOption, opt),
+            meta.TagPayload(SocketOption, opt),
             self.handle.inner,
             os.SOL_SOCKET,
             @enumToInt(opt),
         );
     }
 
-    pub fn set(self: *const Self, comptime opt: SocketOptionType, value: meta.TagPayloadType(SocketOption, opt)) !void {
+    pub fn set(self: *const Self, comptime opt: SocketOptionType, value: meta.TagPayload(SocketOption, opt)) !void {
         const val = switch (@TypeOf(value)) {
             bool => @intCast(c_int, @boolToInt(value)),
             else => value,

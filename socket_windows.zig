@@ -111,7 +111,7 @@ pub const Socket = struct {
         return @typeInfo(@typeInfo(@TypeOf(func)).Fn.return_type.?).ErrorUnion;
     }
 
-    fn call(self: *Self, comptime function: anytype, raw_args: anytype, comptime opts: pike.CallOptions) callconv(.Async) (ErrorUnionOf(function).error_set || error{OperationCancelled})!pike.Overlapped {
+    fn call(_: *Self, comptime function: anytype, raw_args: anytype, comptime _: pike.CallOptions) callconv(.Async) (ErrorUnionOf(function).error_set || error{OperationCancelled})!pike.Overlapped {
         var overlapped = pike.Overlapped.init(pike.Task.init(@frame()));
         var args = raw_args;
 
@@ -144,7 +144,7 @@ pub const Socket = struct {
         try windows.shutdown(@ptrCast(ws2_32.SOCKET, self.handle.inner), how);
     }
 
-    pub fn get(self: *const Self, comptime opt: SocketOptionType) !meta.TagPayloadType(SocketOption, opt) {
+    pub fn get(self: *const Self, comptime opt: SocketOptionType) !meta.TagPayload(SocketOption, opt) {
         if (opt == .socket_error) {
             const errno = try windows.getsockopt(u32, @ptrCast(ws2_32.SOCKET, self.handle.inner), os.SOL_SOCKET, @enumToInt(opt));
             if (errno != 0) {
@@ -168,7 +168,7 @@ pub const Socket = struct {
             }
         } else {
             return windows.getsockopt(
-                meta.TagPayloadType(SocketOption, opt),
+                meta.TagPayload(SocketOption, opt),
                 @ptrCast(ws2_32.SOCKET, self.handle.inner),
                 os.SOL_SOCKET,
                 @enumToInt(opt),
@@ -176,7 +176,7 @@ pub const Socket = struct {
         }
     }
 
-    pub fn set(self: *const Self, comptime opt: SocketOptionType, val: meta.TagPayloadType(SocketOption, opt)) !void {
+    pub fn set(self: *const Self, comptime opt: SocketOptionType, val: meta.TagPayload(SocketOption, opt)) !void {
         try windows.setsockopt(
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             os.SOL_SOCKET,
@@ -220,7 +220,7 @@ pub const Socket = struct {
         var buf: [2 * @sizeOf(ws2_32.sockaddr_storage) + 32]u8 = undefined;
         var num_bytes: windows.DWORD = undefined;
 
-        const overlapped = try self.call(windows.AcceptEx, .{
+        _ = try self.call(windows.AcceptEx, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             @ptrCast(ws2_32.SOCKET, incoming.handle.inner),
             &buf,
@@ -256,7 +256,7 @@ pub const Socket = struct {
     pub fn connect(self: *Self, address: net.Address) callconv(.Async) !void {
         try self.bind(net.Address.initIp4(.{ 0, 0, 0, 0 }, 0));
 
-        const overlapped = try self.call(windows.ConnectEx, .{
+        _ = try self.call(windows.ConnectEx, .{
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
             &address.any,
             address.getOsSockLen(),

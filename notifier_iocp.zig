@@ -8,7 +8,7 @@ const net = std.net;
 const math = std.math;
 
 pub inline fn init() !void {
-    const info = try windows.WSAStartup(2, 2);
+    _ = try windows.WSAStartup(2, 2);
 }
 
 pub inline fn deinit() void {
@@ -58,10 +58,10 @@ pub const Notifier = struct {
         windows.CloseHandle(self.handle);
     }
 
-    pub fn register(self: *const Self, handle: *const Handle, comptime opts: pike.PollOptions) !void {
+    pub fn register(self: *const Self, handle: *const Handle, comptime _: pike.PollOptions) !void {
         if (handle.inner == windows.INVALID_HANDLE_VALUE) return;
 
-        const port = try windows.CreateIoCompletionPort(handle.inner, self.handle, 0, 0);
+        _ = try windows.CreateIoCompletionPort(handle.inner, self.handle, 0, 0);
 
         try windows.SetFileCompletionNotificationModes(
             handle.inner,

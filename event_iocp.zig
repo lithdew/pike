@@ -11,7 +11,7 @@ pub const Event = struct {
         return Self{};
     }
 
-    pub fn deinit(self: *Self) void {}
+    pub fn deinit(_: *Self) void {}
 
     pub fn registerTo(self: *Self, notifier: *const pike.Notifier) !void {
         self.port = notifier.handle;

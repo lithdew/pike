@@ -34,18 +34,18 @@ fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
     try socket.registerTo(notifier);
     try socket.connect(address);
 
-    log.info("Connected to: {}", .{address});
+    log.info("Connected to: {s}", .{address});
 
     var buf: [1024]u8 = undefined;
     var n: usize = undefined;
 
     n = try socket.read(&buf);
     if (n == 0) return;
-    log.info("Got: {}", .{buf[0..n]});
+    log.info("Got: {s}", .{buf[0..n]});
 
     n = try socket.read(&buf);
     if (n == 0) return;
-    log.info("Got: {}", .{buf[0..n]});
+    log.info("Got: {s}", .{buf[0..n]});
 
     _ = try socket.write("Hello world!\n");
     _ = try socket.send("Hello world!\n", 0);

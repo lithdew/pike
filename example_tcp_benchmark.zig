@@ -91,7 +91,7 @@ fn runBenchmarkServer(notifier: *const pike.Notifier, address: net.Address, stop
 
     try client.socket.registerTo(notifier);
 
-    var buf: [65536]u8 = undefined;
+    var buf: [1024]u8 = undefined;
     while (true) {
         _ = try client.socket.send(&buf, 0);
     }
@@ -108,7 +108,7 @@ fn runBenchmarkClient(notifier: *const pike.Notifier, address: net.Address, stop
 
     log.info("Connected to: {}", .{address});
 
-    var buf: [65536]u8 = undefined;
+    var buf: [1024]u8 = undefined;
     while (true) {
         const n = try socket.recv(&buf, 0);
         if (n == 0) return;

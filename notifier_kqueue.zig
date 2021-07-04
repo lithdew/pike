@@ -68,7 +68,7 @@ pub const Notifier = struct {
             event.udata = @ptrToInt(handle);
         }
 
-        const num_events = try os.kevent(self.handle, changelist[0..changelist_len], &[0]os.Kevent{}, null);
+        _ = try os.kevent(self.handle, changelist[0..changelist_len], &[0]os.Kevent{}, null);
     }
 
     pub fn poll(self: *const Self, timeout: i32) !void {

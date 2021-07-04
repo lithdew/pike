@@ -33,7 +33,7 @@ pub const Event = struct {
         try notifier.register(&self.handle, .{ .read = true, .write = true });
     }
 
-    inline fn wake(handle: *pike.Handle, batch: *pike.Batch, opts: pike.WakeOptions) void {
+    fn wake(handle: *pike.Handle, batch: *pike.Batch, opts: pike.WakeOptions) void {
         const self = @fieldParentPtr(Self, "handle", handle);
 
         if (opts.write_ready) if (self.writers.notify()) |task| batch.push(task);
@@ -48,7 +48,7 @@ pub const Event = struct {
         return @typeInfo(@typeInfo(@TypeOf(func)).Fn.return_type.?).ErrorUnion;
     }
 
-    inline fn call(self: *Self, comptime function: anytype, args: anytype, comptime opts: pike.CallOptions) !ErrorUnionOf(function).payload {
+    fn call(self: *Self, comptime function: anytype, args: anytype, comptime opts: pike.CallOptions) !ErrorUnionOf(function).payload {
         while (true) {
             const result = @call(.{ .modifier = .always_inline }, function, args) catch |err| switch (err) {
                 error.WouldBlock => {

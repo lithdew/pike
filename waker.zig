@@ -181,7 +181,6 @@ test "PackedWaker.wake() / PackedWaker.wait()" {
     testing.expect(waker.wake(.{ .a = true, .b = true, .c = true, .d = true }) == null);
     testing.expect(mem.allEqual(bool, &waker.ready, true));
 
-    var scope = Scope{ .inner = undefined };
     testing.expect(waker.wait(.{ .a = true, .b = true, .c = true, .d = true }));
     testing.expect(mem.allEqual(bool, &waker.ready, false));
 
@@ -333,8 +332,6 @@ test "PackedList.append() / PackedList.prepend() / PackedList.pop()" {
 
     var A = Node{ .data = 'A' };
     var B = Node{ .data = 'B' };
-    var C = Node{ .data = 'C' };
-    var D = Node{ .data = 'D' };
 
     U8List.append(&heads, .{ .a = true, .b = true }, &A);
     testing.expect(heads[0] == &A and heads[0].?.prev[0] == &A and heads[0].?.next[0] == null);
