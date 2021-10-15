@@ -1,10 +1,9 @@
 const std = @import("std");
-const os = @import("os");
 
 const math = std.math;
 const builtin = std.builtin;
 
-usingnamespace @import("os");
+const os = std.os;
 
 pub usingnamespace if (!@hasDecl(std.os, "SHUT_RD") and !@hasDecl(std.os, "SHUT_WR") and !@hasDecl(std.os, "SHUT_RDWR"))
     struct {
