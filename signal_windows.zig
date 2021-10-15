@@ -1,11 +1,9 @@
 const std = @import("std");
 const pike = @import("pike.zig");
 const windows = @import("os/windows.zig");
-
+const PackedWaker = @import("waker.zig").PackedWaker;
 const math = std.math;
 const meta = std.meta;
-
-usingnamespace @import("waker.zig");
 
 pub const SignalType = packed struct {
     terminate: bool = false,

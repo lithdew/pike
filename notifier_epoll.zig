@@ -24,7 +24,7 @@ pub const Notifier = struct {
     handle: i32,
 
     pub fn init() !Self {
-        const handle = try os.epoll_create1(os.EPOLL_CLOEXEC);
+        const handle = try os.epoll_create1(os.linux.EPOLL.CLOEXEC);
         errdefer os.close(handle);
 
         return Self{ .handle = handle };
@@ -37,18 +37,18 @@ pub const Notifier = struct {
     pub fn register(self: *const Self, handle: *const Handle, comptime opts: pike.PollOptions) !void {
         if (handle.inner == -1) return;
 
-        var events: u32 = os.EPOLLET | os.EPOLLERR | os.EPOLLRDHUP;
-        if (opts.read) events |= os.EPOLLIN;
-        if (opts.write) events |= os.EPOLLOUT;
+        var events: u32 = os.linux.EPOLL.ET | os.linux.EPOLL.ERR | os.linux.EPOLL.RDHUP;
+        if (opts.read) events |= os.linux.EPOLL.IN;
+        if (opts.write) events |= os.linux.EPOLL.OUT;
 
-        try os.epoll_ctl(self.handle, os.EPOLL_CTL_ADD, handle.inner, &os.epoll_event{
+        _ = os.linux.epoll_ctl(self.handle, os.linux.EPOLL.CTL_ADD, handle.inner, &os.linux.epoll_event{
             .events = events,
             .data = .{ .ptr = @ptrToInt(handle) },
         });
     }
 
     pub fn poll(self: *const Self, timeout: i32) !void {
-        var events: [128]os.epoll_event = undefined;
+        var events: [128]os.linux.epoll_event = undefined;
 
         var batch: pike.Batch = .{};
         defer pike.dispatch(batch, .{});
@@ -59,9 +59,9 @@ pub const Notifier = struct {
 
             const handle = @intToPtr(*Handle, e.data.ptr);
 
-            const shutdown = e.events & (os.EPOLLERR | os.EPOLLRDHUP) != 0;
-            const read_ready = e.events & os.EPOLLIN != 0;
-            const write_ready = e.events & os.EPOLLOUT != 0;
+            const shutdown = e.events & (os.linux.EPOLL.ERR | os.linux.EPOLL.RDHUP) != 0;
+            const read_ready = e.events & os.linux.EPOLL.IN != 0;
+            const write_ready = e.events & os.linux.EPOLL.OUT != 0;
 
             handle.wake(&batch, .{
                 .shutdown = shutdown,

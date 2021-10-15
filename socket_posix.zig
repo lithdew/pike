@@ -1,14 +1,12 @@
 const std = @import("std");
 const pike = @import("pike.zig");
 const posix = @import("os/posix.zig");
-
+const Waker = @import("waker.zig").Waker;
 const io = std.io;
 const os = std.os;
 const net = std.net;
 const mem = std.mem;
 const meta = std.meta;
-
-usingnamespace @import("waker.zig");
 
 pub const SocketOptionType = enum(u32) {
     debug = os.SO_DEBUG,
