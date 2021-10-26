@@ -50,13 +50,13 @@ pub const WSAID_GETACCEPTEXSOCKADDRS = windows.GUID{
 };
 
 pub const sockaddr_storage = extern struct {
-    family: ADDRESS_FAMILY,
-    __ss_padding: [128 - @sizeOf(windows.ULONGLONG) - @sizeOf(ADDRESS_FAMILY)]u8,
+    family: ws2_32.ADDRESS_FAMILY,
+    __ss_padding: [128 - @sizeOf(windows.ULONGLONG) - @sizeOf(ws2_32.ADDRESS_FAMILY)]u8,
     __ss_align: windows.ULONGLONG,
 };
 
 pub extern "ws2_32" fn getsockopt(
-    s: SOCKET,
+    s: ws2_32.SOCKET,
     level: c_int,
     optname: c_int,
     optval: [*]u8,
@@ -64,20 +64,20 @@ pub extern "ws2_32" fn getsockopt(
 ) callconv(.Stdcall) c_int;
 
 pub extern "ws2_32" fn shutdown(
-    s: SOCKET,
+    s: ws2_32.SOCKET,
     how: c_int,
 ) callconv(.Stdcall) c_int;
 
 pub extern "ws2_32" fn recv(
-    s: SOCKET,
+    s: ws2_32.SOCKET,
     buf: [*]u8,
     len: c_int,
     flags: c_int,
 ) callconv(.Stdcall) c_int;
 
 pub const ConnectEx = fn (
-    s: SOCKET,
-    name: *const sockaddr,
+    s: ws2_32.SOCKET,
+    name: *const ws2_32.sockaddr,
     namelen: c_int,
     lpSendBuffer: ?*c_void,
     dwSendDataLength: windows.DWORD,
@@ -86,12 +86,12 @@ pub const ConnectEx = fn (
 ) callconv(.Stdcall) windows.BOOL;
 
 pub const AcceptEx = fn (
-    sListenSocket: SOCKET,
-    sAcceptSocket: SOCKET,
+    sListenSocket: ws2_32.SOCKET,
+    sAcceptSocket: ws2_32.SOCKET,
     lpOutputBuffer: [*]u8,
     dwReceiveDataLength: windows.DWORD,
-    dwLocalAddressLength: socklen_t,
-    dwRemoteAddressLength: socklen_t,
+    dwLocalAddressLength: ws2_32.socklen_t,
+    dwRemoteAddressLength: ws2_32.socklen_t,
     lpdwBytesReceived: ?*windows.DWORD,
     lpOverlapped: *windows.OVERLAPPED,
 ) callconv(.Stdcall) windows.BOOL;
@@ -99,10 +99,10 @@ pub const AcceptEx = fn (
 pub const GetAcceptExSockaddrs = fn (
     lpOutputBuffer: [*]const u8,
     dwReceiveDataLength: windows.DWORD,
-    dwLocalAddressLength: socklen_t,
-    dwRemoteAddressLength: socklen_t,
-    LocalSockaddr: **sockaddr,
+    dwLocalAddressLength: ws2_32.socklen_t,
+    dwRemoteAddressLength: ws2_32.socklen_t,
+    LocalSockaddr: **ws2_32.sockaddr,
     LocalSockaddrLength: *windows.INT,
-    RemoteSockaddr: **sockaddr,
+    RemoteSockaddr: **ws2_32.sockaddr,
     RemoteSockaddrLength: *windows.INT,
 ) callconv(.Stdcall) void;

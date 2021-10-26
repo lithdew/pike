@@ -1,10 +1,8 @@
 const std = @import("std");
 const pike = @import("pike.zig");
-
+const Waker = @import("waker.zig").Waker;
 const os = std.os;
 const mem = std.mem;
-
-usingnamespace @import("waker.zig");
 
 pub const Event = struct {
     const Self = @This();
@@ -16,7 +14,7 @@ pub const Event = struct {
     pub fn init() !Self {
         return Self{
             .handle = .{
-                .inner = try os.eventfd(0, os.EFD_CLOEXEC | os.EFD_NONBLOCK),
+                .inner = try os.eventfd(0, os.linux.EFD.CLOEXEC | os.linux.EFD.NONBLOCK),
                 .wake_fn = wake,
             },
         };

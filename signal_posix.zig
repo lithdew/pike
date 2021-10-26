@@ -1,15 +1,13 @@
 const std = @import("std");
 const pike = @import("pike.zig");
 const posix = @import("os/posix.zig");
-
+const PackedWaker = @import("waker.zig").PackedWaker;
 const os = std.os;
 const system = os.system;
 
 const mem = std.mem;
 const meta = std.meta;
-const builtin = std.builtin;
-
-usingnamespace @import("waker.zig");
+const builtin = @import("builtin");
 
 pub const SignalType = packed struct {
     terminate: bool = false,
@@ -18,13 +16,13 @@ pub const SignalType = packed struct {
     hup: bool = false,
 
     fn toSet(self: SignalType) os.sigset_t {
-        const sigaddset = if (comptime std.Target.current.isDarwin()) system.sigaddset else os.linux.sigaddset;
+        const sigaddset = if (comptime builtin.target.isDarwin()) system.sigaddset else os.linux.sigaddset;
 
         var set = mem.zeroes(os.sigset_t);
-        if (self.terminate) sigaddset(&set, os.SIGTERM);
-        if (self.interrupt) sigaddset(&set, os.SIGINT);
-        if (self.quit) sigaddset(&set, os.SIGQUIT);
-        if (self.hup) sigaddset(&set, os.SIGHUP);
+        if (self.terminate) sigaddset(&set, os.SIG.TERM);
+        if (self.interrupt) sigaddset(&set, os.SIG.INT);
+        if (self.quit) sigaddset(&set, os.SIG.QUIT);
+        if (self.hup) sigaddset(&set, os.SIG.HUP);
 
         return set;
     }
@@ -53,7 +51,7 @@ pub const Signal = struct {
         current_held.release();
 
         switch (signal) {
-            os.SIGTERM => {
+            os.SIG.TERM => {
                 if (!current_mask.terminate) return;
 
                 const held = lock.acquire();
@@ -62,7 +60,7 @@ pub const Signal = struct {
 
                 if (next_node) |node| pike.dispatch(&node.data, .{});
             },
-            os.SIGINT => {
+            os.SIG.INT => {
                 if (!current_mask.interrupt) return;
 
                 const held = lock.acquire();
@@ -71,7 +69,7 @@ pub const Signal = struct {
 
                 if (next_node) |node| pike.dispatch(&node.data, .{});
             },
-            os.SIGQUIT => {
+            os.SIG.QUIT => {
                 if (!current_mask.quit) return;
 
                 const held = lock.acquire();
@@ -80,7 +78,7 @@ pub const Signal = struct {
 
                 if (next_node) |node| pike.dispatch(&node.data, .{});
             },
-            os.SIGHUP => {
+            os.SIG.HUP => {
                 if (!current_mask.hup) return;
 
                 const held = lock.acquire();
@@ -107,10 +105,10 @@ pub const Signal = struct {
 
         var previous = [_]os.Sigaction{EMPTY_SIGACTION} ** @bitSizeOf(SignalType);
 
-        os.sigaction(os.SIGTERM, &sigaction, &previous[std.meta.fieldIndex(SignalType, "terminate").?]);
-        os.sigaction(os.SIGINT, &sigaction, &previous[std.meta.fieldIndex(SignalType, "interrupt").?]);
-        os.sigaction(os.SIGQUIT, &sigaction, &previous[std.meta.fieldIndex(SignalType, "quit").?]);
-        os.sigaction(os.SIGHUP, &sigaction, &previous[std.meta.fieldIndex(SignalType, "hup").?]);
+        os.sigaction(os.SIG.TERM, &sigaction, &previous[std.meta.fieldIndex(SignalType, "terminate").?]);
+        os.sigaction(os.SIG.INT, &sigaction, &previous[std.meta.fieldIndex(SignalType, "interrupt").?]);
+        os.sigaction(os.SIG.QUIT, &sigaction, &previous[std.meta.fieldIndex(SignalType, "quit").?]);
+        os.sigaction(os.SIG.HUP, &sigaction, &previous[std.meta.fieldIndex(SignalType, "hup").?]);
 
         mask = new_mask;
 
@@ -124,10 +122,10 @@ pub const Signal = struct {
         for (self.previous) |sigaction, i| {
             os.sigaction(
                 switch (i) {
-                    0 => os.SIGTERM,
-                    1 => os.SIGINT,
-                    2 => os.SIGQUIT,
-                    3 => os.SIGHUP,
+                    0 => os.SIG.TERM,
+                    1 => os.SIG.INT,
+                    2 => os.SIG.QUIT,
+                    3 => os.SIG.HUP,
                     else => unreachable,
                 },
                 &sigaction,

@@ -2,7 +2,7 @@ const std = @import("std");
 const root = @import("root");
 
 const os = std.os;
-const builtin = std.builtin;
+const builtin = @import("builtin");
 
 pub const PollOptions = packed struct {
     read: bool = false,
@@ -21,7 +21,7 @@ pub const WakeOptions = packed struct {
     write_ready: bool = false,
 };
 
-const has_epoll = @hasDecl(os.system, "epoll_create1") and @hasDecl(os.system, "epoll_ctl") and @hasDecl(os, "epoll_event");
+const has_epoll = @hasDecl(os.linux, "epoll_create1") and @hasDecl(os.linux, "epoll_ctl") and @hasDecl(os.linux, "epoll_event");
 const has_kqueue = @hasDecl(os.system, "kqueue") and @hasDecl(os.system, "kevent") and @hasDecl(os, "Kevent");
 
 // Export asynchronous frame dispatcher and user scope (Task).
@@ -88,6 +88,7 @@ else
     struct {
         fn default(batchable: anytype, args: anytype) void {
             var batch = Batch.from(batchable);
+            _ = args;
             while (batch.pop()) |task| {
                 resume task.frame;
             }

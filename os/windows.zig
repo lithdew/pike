@@ -5,8 +5,7 @@ const math = std.math;
 
 const os = std.os;
 const windows = os.windows;
-
-pub usingnamespace windows;
+const ws2_32 = windows.ws2_32;
 
 pub const FILE_SKIP_COMPLETION_PORT_ON_SUCCESS = 0x1;
 pub const FILE_SKIP_SET_EVENT_ON_HANDLE = 0x2;
@@ -17,24 +16,24 @@ pub const CTRL_CLOSE_EVENT: windows.DWORD = 2;
 pub const CTRL_LOGOFF_EVENT: windows.DWORD = 5;
 pub const CTRL_SHUTDOWN_EVENT: windows.DWORD = 6;
 
-pub const HANDLER_ROUTINE = fn (dwCtrlType: DWORD) callconv(.C) BOOL;
+pub const HANDLER_ROUTINE = fn (dwCtrlType: windows.DWORD) callconv(.C) windows.BOOL;
 
 pub const OVERLAPPED_ENTRY = extern struct {
-    lpCompletionKey: ULONG_PTR,
-    lpOverlapped: ?LPOVERLAPPED,
-    Internal: ULONG_PTR,
-    dwNumberOfBytesTransferred: DWORD,
+    lpCompletionKey: windows.ULONG_PTR,
+    lpOverlapped: ?windows.LPOVERLAPPED,
+    Internal: windows.ULONG_PTR,
+    dwNumberOfBytesTransferred: windows.DWORD,
 };
 
-pub fn loadWinsockExtensionFunction(comptime T: type, sock: ws2_32.SOCKET, guid: GUID) !T {
+pub fn loadWinsockExtensionFunction(comptime T: type, sock: ws2_32.SOCKET, guid: windows.GUID) !T {
     var function: T = undefined;
-    var num_bytes: DWORD = undefined;
+    var num_bytes: windows.DWORD = undefined;
 
     const rc = ws2_32.WSAIoctl(
         sock,
         @import("windows/ws2_32.zig").SIO_GET_EXTENSION_FUNCTION_POINTER,
         @ptrCast(*const c_void, &guid),
-        @sizeOf(GUID),
+        @sizeOf(windows.GUID),
         &function,
         @sizeOf(T),
         &num_bytes,
@@ -46,7 +45,7 @@ pub fn loadWinsockExtensionFunction(comptime T: type, sock: ws2_32.SOCKET, guid:
         return switch (ws2_32.WSAGetLastError()) {
             .WSAEOPNOTSUPP => error.OperationNotSupported,
             .WSAENOTSOCK => error.FileDescriptorNotASocket,
-            else => |err| unexpectedWSAError(err),
+            else => |err| windows.unexpectedWSAError(err),
         };
     }
 
@@ -70,11 +69,11 @@ pub fn SetConsoleCtrlHandler(handler_routine: ?HANDLER_ROUTINE, add: bool) !void
     }
 }
 
-pub fn SetFileCompletionNotificationModes(handle: HANDLE, flags: UCHAR) !void {
+pub fn SetFileCompletionNotificationModes(handle: windows.HANDLE, flags: windows.UCHAR) !void {
     const success = @import("windows/kernel32.zig").SetFileCompletionNotificationModes(handle, flags);
 
-    if (success == FALSE) {
-        return unexpectedError(kernel32.GetLastError());
+    if (success == windows.FALSE) {
+        return windows.unexpectedError(windows.kernel32.GetLastError());
     }
 }
 
@@ -86,9 +85,9 @@ pub const GetQueuedCompletionStatusError = error{
 } || os.UnexpectedError;
 
 pub fn GetQueuedCompletionStatusEx(
-    completion_port: HANDLE,
-    completion_port_entries: []OVERLAPPED_ENTRY,
-    timeout_ms: ?DWORD,
+    completion_port: windows.HANDLE,
+    completion_port_entries: []windows.OVERLAPPED_ENTRY,
+    timeout_ms: ?windows.DWORD,
     alertable: bool,
 ) GetQueuedCompletionStatusError!u32 {
     var num_entries_removed: u32 = 0;
@@ -96,28 +95,28 @@ pub fn GetQueuedCompletionStatusEx(
     const success = @import("windows/kernel32.zig").GetQueuedCompletionStatusEx(
         completion_port,
         completion_port_entries.ptr,
-        @intCast(ULONG, completion_port_entries.len),
+        @intCast(windows.ULONG, completion_port_entries.len),
         &num_entries_removed,
-        timeout_ms orelse INFINITE,
+        timeout_ms orelse windows.INFINITE,
         @boolToInt(alertable),
     );
 
-    if (success == FALSE) {
-        return switch (kernel32.GetLastError()) {
+    if (success == windows.FALSE) {
+        return switch (windows.kernel32.GetLastError()) {
             .ABANDONED_WAIT_0 => error.Aborted,
             .OPERATION_ABORTED => error.Cancelled,
             .HANDLE_EOF => error.EOF,
             .IMEOUT => error.Timeout,
-            else => |err| unexpectedError(err),
+            else => |err| windows.unexpectedError(err),
         };
     }
 
     return num_entries_removed;
 }
 
-pub fn pollBaseSocket(socket: ws2_32.SOCKET, ioctl_code: DWORD) !ws2_32.SOCKET {
+pub fn pollBaseSocket(socket: ws2_32.SOCKET, ioctl_code: windows.DWORD) !ws2_32.SOCKET {
     var base_socket: ws2_32.SOCKET = undefined;
-    var num_bytes: DWORD = 0;
+    var num_bytes: windows.DWORD = 0;
 
     const rc = ws2_32.WSAIoctl(
         socket,
@@ -134,7 +133,7 @@ pub fn pollBaseSocket(socket: ws2_32.SOCKET, ioctl_code: DWORD) !ws2_32.SOCKET {
     if (rc == ws2_32.SOCKET_ERROR) {
         return switch (ws2_32.WSAGetLastError()) {
             .WSAEOPNOTSUPP => error.OperationNotSupported,
-            else => |err| unexpectedWSAError(err),
+            else => |err| windows.unexpectedWSAError(err),
         };
     }
 
@@ -177,7 +176,7 @@ pub fn GetAcceptExSockaddrs(socket: ws2_32.SOCKET, buf: []const u8, local_addr_l
     );
 }
 
-pub fn AcceptEx(listening_socket: ws2_32.SOCKET, accepted_socket: ws2_32.SOCKET, buf: []u8, local_addr_len: u32, remote_addr_len: u32, num_bytes: *DWORD, overlapped: *OVERLAPPED) !void {
+pub fn AcceptEx(listening_socket: ws2_32.SOCKET, accepted_socket: ws2_32.SOCKET, buf: []u8, local_addr_len: u32, remote_addr_len: u32, num_bytes: *windows.DWORD, overlapped: *windows.OVERLAPPED) !void {
     const func = try loadWinsockExtensionFunction(@import("windows/ws2_32.zig").AcceptEx, listening_socket, @import("windows/ws2_32.zig").WSAID_ACCEPTEX);
 
     const success = func(
@@ -191,7 +190,7 @@ pub fn AcceptEx(listening_socket: ws2_32.SOCKET, accepted_socket: ws2_32.SOCKET,
         overlapped,
     );
 
-    if (success == FALSE) {
+    if (success == windows.FALSE) {
         return switch (ws2_32.WSAGetLastError()) {
             .WSAECONNRESET => error.ConnectionResetByPeer,
             .WSAEFAULT => error.BadAddress,
@@ -201,16 +200,16 @@ pub fn AcceptEx(listening_socket: ws2_32.SOCKET, accepted_socket: ws2_32.SOCKET,
             .WSAENOBUFS => error.FileDescriptorNotASocket,
             .WSAEOPNOTSUPP => error.OperationNotSupported,
             .WSA_IO_PENDING, .WSAEWOULDBLOCK => error.WouldBlock,
-            else => |err| unexpectedWSAError(err),
+            else => |err| windows.unexpectedWSAError(err),
         };
     }
 }
 
-pub fn ConnectEx(sock: ws2_32.SOCKET, sock_addr: *const ws2_32.sockaddr, sock_len: ws2_32.socklen_t, overlapped: *OVERLAPPED) !void {
+pub fn ConnectEx(sock: ws2_32.SOCKET, sock_addr: *const ws2_32.sockaddr, sock_len: ws2_32.socklen_t, overlapped: *windows.OVERLAPPED) !void {
     const func = try loadWinsockExtensionFunction(@import("windows/ws2_32.zig").ConnectEx, sock, @import("windows/ws2_32.zig").WSAID_CONNECTEX);
 
     const success = func(sock, sock_addr, @intCast(c_int, sock_len), null, 0, null, overlapped);
-    if (success == FALSE) {
+    if (success == windows.FALSE) {
         return switch (ws2_32.WSAGetLastError()) {
             .WSAEADDRINUSE => error.AddressInUse,
             .WSAEADDRNOTAVAIL => error.AddressNotAvailable,
@@ -225,7 +224,7 @@ pub fn ConnectEx(sock: ws2_32.SOCKET, sock_addr: *const ws2_32.sockaddr, sock_le
             .WSAEAFNOSUPPORT => error.AddressFamilyNotSupported,
             .WSA_IO_PENDING, .WSAEINPROGRESS, .WSAEWOULDBLOCK => error.WouldBlock,
             .WSAEHOSTUNREACH, .WSAENETUNREACH => error.NetworkUnreachable,
-            else => |err| unexpectedWSAError(err),
+            else => |err| windows.unexpectedWSAError(err),
         };
     }
 }
@@ -243,7 +242,7 @@ pub fn bind_(sock: ws2_32.SOCKET, sock_addr: *const ws2_32.sockaddr, sock_len: w
             .WSAEINVAL => error.AlreadyBound,
             .WSAENOBUFS => error.NoEphemeralPortsAvailable,
             .WSAENOTSOCK => error.NotASocket,
-            else => |err| unexpectedWSAError(err),
+            else => |err| windows.unexpectedWSAError(err),
         };
     }
 }
@@ -260,7 +259,7 @@ pub fn listen_(sock: ws2_32.SOCKET, backlog: usize) !void {
             .WSAENOTSOCK => error.FileDescriptorNotASocket,
             .WSAEOPNOTSUPP => error.OperationNotSupported,
             .WSAEINPROGRESS => error.WouldBlock,
-            else => |err| unexpectedWSAError(err),
+            else => |err| windows.unexpectedWSAError(err),
         };
     }
 }
@@ -282,7 +281,7 @@ pub fn connect(sock: ws2_32.SOCKET, sock_addr: *const ws2_32.sockaddr, len: ws2_
             .WSAEAFNOSUPPORT => error.AddressFamilyNotSupported,
             .WSAEINPROGRESS, .WSAEWOULDBLOCK => error.WouldBlock,
             .WSAEHOSTUNREACH, .WSAENETUNREACH => error.NetworkUnreachable,
-            else => |err| unexpectedWSAError(err),
+            else => |err| windows.unexpectedWSAError(err),
         };
     }
 }
@@ -306,7 +305,7 @@ pub fn recv(sock: ws2_32.SOCKET, buf: []u8) !usize {
             .WSAECONNABORTED => error.ConnectionAborted,
             .WSAETIMEDOUT => error.Timeout,
             .WSAECONNRESET => error.Refused,
-            else => |err| unexpectedWSAError(err),
+            else => |err| windows.unexpectedWSAError(err),
         };
     }
 
@@ -323,7 +322,7 @@ pub fn getsockopt(comptime T: type, handle: ws2_32.SOCKET, level: c_int, opt: c_
             .WSAEFAULT => error.InvalidParameter,
             .WSAENOPROTOOPT => error.UnsupportedOption,
             .WSAENOTSOCK => error.NotASocket,
-            else => |err| unexpectedWSAError(err),
+            else => |err| windows.unexpectedWSAError(err),
         };
     }
 
@@ -341,7 +340,7 @@ pub fn shutdown(socket: ws2_32.SOCKET, how: c_int) !void {
             .WSAENETDOWN => error.NetworkSubsystemFailed,
             .WSAENOTCONN => error.SocketNotConnected,
             .WSAENOTSOCK => error.FileDescriptorNotASocket,
-            else => |err| unexpectedWSAError(err),
+            else => |err| windows.unexpectedWSAError(err),
         };
     }
 }
@@ -377,12 +376,12 @@ pub fn setsockopt(sock: ws2_32.SOCKET, level: u32, opt: u32, val: ?[]const u8) S
             .WSAEINVAL => return error.SocketNotBound,
             .WSAENOTCONN => return error.SocketNotConnected,
             .WSAESHUTDOWN => return error.AlreadyShutdown,
-            else => |err| return unexpectedWSAError(err),
+            else => |err| return windows.unexpectedWSAError(err),
         }
     }
 }
 
-pub fn WSASendTo(sock: ws2_32.SOCKET, buf: []const u8, flags: DWORD, addr: ?*const ws2_32.sockaddr, addr_len: ws2_32.socklen_t, overlapped: *OVERLAPPED) !void {
+pub fn WSASendTo(sock: ws2_32.SOCKET, buf: []const u8, flags: windows.DWORD, addr: ?*const ws2_32.sockaddr, addr_len: ws2_32.socklen_t, overlapped: *windows.OVERLAPPED) !void {
     var wsa_buf = ws2_32.WSABUF{
         .len = @truncate(u32, buf.len),
         .buf = @intToPtr([*]u8, @ptrToInt(buf.ptr)),
@@ -408,12 +407,12 @@ pub fn WSASendTo(sock: ws2_32.SOCKET, buf: []const u8, flags: DWORD, addr: ?*con
             .WSAESHUTDOWN => error.AlreadyShutdown,
             .WSAETIMEDOUT => error.Timeout,
             .WSA_OPERATION_ABORTED => error.OperationAborted,
-            else => |err| unexpectedWSAError(err),
+            else => |err| windows.unexpectedWSAError(err),
         };
     }
 }
 
-pub fn WSASend(sock: ws2_32.SOCKET, buf: []const u8, flags: DWORD, overlapped: *OVERLAPPED) !void {
+pub fn WSASend(sock: ws2_32.SOCKET, buf: []const u8, flags: windows.DWORD, overlapped: *windows.OVERLAPPED) !void {
     var wsa_buf = ws2_32.WSABUF{
         .len = @truncate(u32, buf.len),
         .buf = @intToPtr([*]u8, @ptrToInt(buf.ptr)),
@@ -439,13 +438,13 @@ pub fn WSASend(sock: ws2_32.SOCKET, buf: []const u8, flags: DWORD, overlapped: *
             .WSAESHUTDOWN => error.AlreadyShutdown,
             .WSAETIMEDOUT => error.Timeout,
             .WSA_OPERATION_ABORTED => error.OperationAborted,
-            else => |err| unexpectedWSAError(err),
+            else => |err| windows.unexpectedWSAError(err),
         };
     }
 }
 
-pub fn WSARecv(sock: ws2_32.SOCKET, buf: []u8, flags: DWORD, overlapped: *OVERLAPPED) !void {
-    var wsa_flags: DWORD = flags;
+pub fn WSARecv(sock: ws2_32.SOCKET, buf: []u8, flags: windows.DWORD, overlapped: *windows.OVERLAPPED) !void {
+    var wsa_flags: windows.DWORD = flags;
     var wsa_buf = ws2_32.WSABUF{
         .len = @truncate(u32, buf.len),
         .buf = buf.ptr,
@@ -471,13 +470,13 @@ pub fn WSARecv(sock: ws2_32.SOCKET, buf: []u8, flags: DWORD, overlapped: *OVERLA
             .WSAESHUTDOWN => error.AlreadyShutdown,
             .WSAETIMEDOUT => error.Timeout,
             .WSA_OPERATION_ABORTED => error.OperationAborted,
-            else => |err| unexpectedWSAError(err),
+            else => |err| windows.unexpectedWSAError(err),
         };
     }
 }
 
-pub fn WSARecvFrom(sock: ws2_32.SOCKET, buf: []u8, flags: DWORD, addr: ?*ws2_32.sockaddr, addr_len: ?*ws2_32.socklen_t, overlapped: *OVERLAPPED) !void {
-    var wsa_flags: DWORD = flags;
+pub fn WSARecvFrom(sock: ws2_32.SOCKET, buf: []u8, flags: windows.DWORD, addr: ?*ws2_32.sockaddr, addr_len: ?*ws2_32.socklen_t, overlapped: *windows.OVERLAPPED) !void {
+    var wsa_flags: windows.DWORD = flags;
     var wsa_buf = ws2_32.WSABUF{
         .len = @truncate(u32, buf.len),
         .buf = buf.ptr,
@@ -503,58 +502,58 @@ pub fn WSARecvFrom(sock: ws2_32.SOCKET, buf: []u8, flags: DWORD, addr: ?*ws2_32.
             .WSAESHUTDOWN => error.AlreadyShutdown,
             .WSAETIMEDOUT => error.Timeout,
             .WSA_OPERATION_ABORTED => error.OperationAborted,
-            else => |err| unexpectedWSAError(err),
+            else => |err| windows.unexpectedWSAError(err),
         };
     }
 }
 
-pub fn ReadFile_(handle: HANDLE, buf: []u8, overlapped: *OVERLAPPED) !void {
-    const len = math.cast(DWORD, buf.len) catch math.maxInt(DWORD);
+pub fn ReadFile_(handle: windows.HANDLE, buf: []u8, overlapped: *windows.OVERLAPPED) !void {
+    const len = math.cast(windows.DWORD, buf.len) catch math.maxInt(windows.DWORD);
 
-    const success = kernel32.ReadFile(handle, buf.ptr, len, null, overlapped);
-    if (success == FALSE) {
-        return switch (kernel32.GetLastError()) {
+    const success = windows.kernel32.ReadFile(handle, buf.ptr, len, null, overlapped);
+    if (success == windows.FALSE) {
+        return switch (windows.kernel32.GetLastError()) {
             .IO_PENDING => error.WouldBlock,
             .OPERATION_ABORTED => error.OperationAborted,
             .BROKEN_PIPE => error.BrokenPipe,
             .HANDLE_EOF, .NETNAME_DELETED => error.EndOfFile,
-            else => |err| unexpectedError(err),
+            else => |err| windows.unexpectedError(err),
         };
     }
 }
 
-pub fn WriteFile_(handle: HANDLE, buf: []const u8, overlapped: *OVERLAPPED) !void {
-    const len = math.cast(DWORD, buf.len) catch math.maxInt(DWORD);
+pub fn WriteFile_(handle: windows.HANDLE, buf: []const u8, overlapped: *windows.OVERLAPPED) !void {
+    const len = math.cast(windows.DWORD, buf.len) catch math.maxInt(windows.DWORD);
 
-    const success = kernel32.WriteFile(handle, buf.ptr, len, null, overlapped);
-    if (success == FALSE) {
-        return switch (kernel32.GetLastError()) {
+    const success = windows.kernel32.WriteFile(handle, buf.ptr, len, null, overlapped);
+    if (success == windows.FALSE) {
+        return switch (windows.kernel32.GetLastError()) {
             .IO_PENDING => error.WouldBlock,
             .OPERATION_ABORTED => error.OperationAborted,
             .BROKEN_PIPE => error.BrokenPipe,
             .HANDLE_EOF, .NETNAME_DELETED => error.EndOfFile,
-            else => |err| unexpectedError(err),
+            else => |err| windows.unexpectedError(err),
         };
     }
 }
 
-pub fn CancelIoEx(handle: HANDLE, overlapped: *OVERLAPPED) !void {
-    const success = kernel32.CancelIoEx(handle, overlapped);
-    if (success == FALSE) {
-        return switch (kernel32.GetLastError()) {
+pub fn CancelIoEx(handle: windows.HANDLE, overlapped: *windows.OVERLAPPED) !void {
+    const success = windows.kernel32.CancelIoEx(handle, overlapped);
+    if (success == windows.FALSE) {
+        return switch (windows.kernel32.GetLastError()) {
             .NOT_FOUND => error.RequestNotFound,
-            else => |err| unexpectedError(err),
+            else => |err| windows.unexpectedError(err),
         };
     }
 }
 
-pub fn GetOverlappedResult_(h: HANDLE, overlapped: *OVERLAPPED, wait: bool) !DWORD {
-    var bytes: DWORD = undefined;
-    if (kernel32.GetOverlappedResult(h, overlapped, &bytes, @boolToInt(wait)) == 0) {
-        return switch (kernel32.GetLastError()) {
+pub fn GetOverlappedResult_(h: windows.HANDLE, overlapped: *windows.OVERLAPPED, wait: bool) !windows.DWORD {
+    var bytes: windows.DWORD = undefined;
+    if (windows.kernel32.GetOverlappedResult(h, overlapped, &bytes, @boolToInt(wait)) == 0) {
+        return switch (windows.kernel32.GetLastError()) {
             .IO_INCOMPLETE => if (!wait) error.WouldBlock else unreachable,
             .OPERATION_ABORTED => error.OperationAborted,
-            else => |err| unexpectedError(err),
+            else => |err| windows.unexpectedError(err),
         };
     }
     return bytes;
