@@ -9,26 +9,26 @@ const mem = std.mem;
 const meta = std.meta;
 
 pub const SocketOptionType = enum(u32) {
-    debug = os.SO_DEBUG,
-    listen = os.SO_ACCEPTCONN,
-    reuse_address = os.SO_REUSEADDR,
-    keep_alive = os.SO_KEEPALIVE,
-    dont_route = os.SO_DONTROUTE,
-    broadcast = os.SO_BROADCAST,
-    linger = os.SO_LINGER,
-    oob_inline = os.SO_OOBINLINE,
+    debug = os.SO.DEBUG,
+    listen = os.SO.ACCEPTCONN,
+    reuse_address = os.SO.REUSEADDR,
+    keep_alive = os.SO.KEEPALIVE,
+    dont_route = os.SO.DONTROUTE,
+    broadcast = os.SO.BROADCAST,
+    linger = os.SO.LINGER,
+    oob_inline = os.SO.OOBINLINE,
 
-    send_buffer_max_size = os.SO_SNDBUF,
-    recv_buffer_max_size = os.SO_RCVBUF,
+    send_buffer_max_size = os.SO.SNDBUF,
+    recv_buffer_max_size = os.SO.RCVBUF,
 
-    send_buffer_min_size = os.SO_SNDLOWAT,
-    recv_buffer_min_size = os.SO_RCVLOWAT,
+    send_buffer_min_size = os.SO.SNDLOWAT,
+    recv_buffer_min_size = os.SO.RCVLOWAT,
 
-    send_timeout = os.SO_SNDTIMEO,
-    recv_timeout = os.SO_RCVTIMEO,
+    send_timeout = os.SO.SNDTIMEO,
+    recv_timeout = os.SO.RCVTIMEO,
 
-    socket_error = os.SO_ERROR,
-    socket_type = os.SO_TYPE,
+    socket_error = os.SO.ERROR,
+    socket_type = os.SO.TYPE,
 };
 
 pub const SocketOption = union(SocketOptionType) {
@@ -74,7 +74,7 @@ pub const Socket = struct {
             .handle = .{
                 .inner = try os.socket(
                     domain,
-                    socket_type | flags | os.SOCK_CLOEXEC | os.SOCK_NONBLOCK,
+                    socket_type | flags | os.SOCK.CLOEXEC | os.SOCK.NONBLOCK,
                     protocol,
                 ),
                 .wake_fn = wake,
@@ -134,32 +134,32 @@ pub const Socket = struct {
 
     pub fn get(self: *const Self, comptime opt: SocketOptionType) !meta.TagPayload(SocketOption, opt) {
         if (opt == .socket_error) {
-            const errno = try posix.getsockopt(u32, self.handle.inner, os.SOL_SOCKET, @enumToInt(opt));
+            const errno = try posix.getsockopt(u32, self.handle.inner, os.SOL.SOCKET, @enumToInt(opt));
             return switch (errno) {
-                0 => {},
-                os.EACCES => error.PermissionDenied,
-                os.EPERM => error.PermissionDenied,
-                os.EADDRINUSE => error.AddressInUse,
-                os.EADDRNOTAVAIL => error.AddressNotAvailable,
-                os.EAFNOSUPPORT => error.AddressFamilyNotSupported,
-                os.EAGAIN => error.SystemResources,
-                os.EALREADY => error.AlreadyConnecting,
-                os.EBADF => error.BadFileDescriptor,
-                os.ECONNREFUSED => error.ConnectionRefused,
-                os.EFAULT => error.InvalidParameter,
-                os.EISCONN => error.AlreadyConnected,
-                os.ENETUNREACH => error.NetworkUnreachable,
-                os.ENOTSOCK => error.NotASocket,
-                os.EPROTOTYPE => error.UnsupportedProtocol,
-                os.ETIMEDOUT => error.ConnectionTimedOut,
-                else => |err| os.unexpectedErrno(err),
+                @enumToInt(os.E.SUCCESS) => {},
+                @enumToInt(os.E.ACCES) => error.PermissionDenied,
+                @enumToInt(os.E.PERM) => error.PermissionDenied,
+                @enumToInt(os.E.ADDRINUSE) => error.AddressInUse,
+                @enumToInt(os.E.ADDRNOTAVAIL) => error.AddressNotAvailable,
+                @enumToInt(os.E.AFNOSUPPORT) => error.AddressFamilyNotSupported,
+                @enumToInt(os.E.AGAIN) => error.SystemResources,
+                @enumToInt(os.E.ALREADY) => error.AlreadyConnecting,
+                @enumToInt(os.E.BADF) => error.BadFileDescriptor,
+                @enumToInt(os.E.CONNREFUSED) => error.ConnectionRefused,
+                @enumToInt(os.E.FAULT) => error.InvalidParameter,
+                @enumToInt(os.E.ISCONN) => error.AlreadyConnected,
+                @enumToInt(os.E.NETUNREACH) => error.NetworkUnreachable,
+                @enumToInt(os.E.NOTSOCK) => error.NotASocket,
+                @enumToInt(os.E.PROTOTYPE) => error.UnsupportedProtocol,
+                @enumToInt(os.E.TIMEDOUT) => error.ConnectionTimedOut,
+                else => |err| os.unexpectedErrno(@intToEnum(os.E, err)),
             };
         }
 
         return posix.getsockopt(
             meta.TagPayload(SocketOption, opt),
             self.handle.inner,
-            os.SOL_SOCKET,
+            os.SOL.SOCKET,
             @enumToInt(opt),
         );
     }
@@ -172,7 +172,7 @@ pub const Socket = struct {
 
         try os.setsockopt(
             self.handle.inner,
-            os.SOL_SOCKET,
+            os.SOL.SOCKET,
             @enumToInt(opt),
             blk: {
                 if (comptime @typeInfo(@TypeOf(val)) == .Optional) {
@@ -207,7 +207,7 @@ pub const Socket = struct {
             self.handle.inner,
             &addr,
             &addr_len,
-            os.SOCK_NONBLOCK | os.SOCK_CLOEXEC,
+            os.SOCK.NONBLOCK | os.SOCK.CLOEXEC,
         }, .{ .read = true });
 
         return Connection{

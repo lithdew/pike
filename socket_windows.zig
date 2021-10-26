@@ -146,7 +146,7 @@ pub const Socket = struct {
 
     pub fn get(self: *const Self, comptime opt: SocketOptionType) !meta.TagPayload(SocketOption, opt) {
         if (opt == .socket_error) {
-            const errno = try windows.getsockopt(u32, @ptrCast(ws2_32.SOCKET, self.handle.inner), os.SOL_SOCKET, @enumToInt(opt));
+            const errno = try windows.getsockopt(u32, @ptrCast(ws2_32.SOCKET, self.handle.inner), os.SOL.SOCKET, @enumToInt(opt));
             if (errno != 0) {
                 return switch (@intToEnum(ws2_32.WinsockError, @truncate(u16, errno))) {
                     .WSAEACCES => error.PermissionDenied,
@@ -170,7 +170,7 @@ pub const Socket = struct {
             return windows.getsockopt(
                 meta.TagPayload(SocketOption, opt),
                 @ptrCast(ws2_32.SOCKET, self.handle.inner),
-                os.SOL_SOCKET,
+                os.SOL.SOCKET,
                 @enumToInt(opt),
             );
         }
@@ -179,7 +179,7 @@ pub const Socket = struct {
     pub fn set(self: *const Self, comptime opt: SocketOptionType, val: meta.TagPayload(SocketOption, opt)) !void {
         try windows.setsockopt(
             @ptrCast(ws2_32.SOCKET, self.handle.inner),
-            os.SOL_SOCKET,
+            os.SOL.SOCKET,
             @enumToInt(opt),
             blk: {
                 if (comptime @typeInfo(@TypeOf(val)) == .Optional) {

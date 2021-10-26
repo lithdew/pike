@@ -26,9 +26,9 @@ pub fn main() !void {
 fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
     defer stopped.* = true;
 
-    const address = try net.Address.parseIp("127.0.0.1", 9000);
+    const address = try net.Address.parseIp("127.0.0.1", 44123);
 
-    var socket = try pike.Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0);
+    var socket = try pike.Socket.init(os.AF.INET, os.SOCK.STREAM, os.IPPROTO.TCP, 0);
     defer socket.deinit();
 
     try socket.registerTo(notifier);

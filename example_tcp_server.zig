@@ -56,7 +56,7 @@ pub const Server = struct {
     frame: @Frame(Server.run),
 
     pub fn init(allocator: *mem.Allocator) !Server {
-        var socket = try pike.Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0);
+        var socket = try pike.Socket.init(os.AF.INET, os.SOCK.STREAM, os.IPPROTO.TCP, 0);
         errdefer socket.deinit();
 
         try socket.set(.reuse_address, true);

@@ -41,7 +41,7 @@ pub fn main() !void {
 
         if (args.len <= index + 1) break :blk default;
 
-        var fields = mem.split(args[index + 1], ":");
+        var fields = mem.split(u8, args[index + 1], ":");
 
         const addr_host = fields.next().?;
         const addr_port = try fmt.parseInt(u16, fields.next().?, 10);
@@ -73,7 +73,7 @@ pub fn main() !void {
 fn runBenchmarkServer(notifier: *const pike.Notifier, address: net.Address, stopped: *bool) !void {
     defer stopped.* = true;
 
-    var socket = try pike.Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0);
+    var socket = try pike.Socket.init(os.AF.INET, os.SOCK.STREAM, os.IPPROTO.TCP, 0);
     defer socket.deinit();
 
     try socket.registerTo(notifier);
@@ -100,7 +100,7 @@ fn runBenchmarkServer(notifier: *const pike.Notifier, address: net.Address, stop
 fn runBenchmarkClient(notifier: *const pike.Notifier, address: net.Address, stopped: *bool) !void {
     defer stopped.* = true;
 
-    var socket = try pike.Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0);
+    var socket = try pike.Socket.init(os.AF.INET, os.SOCK.STREAM, os.IPPROTO.TCP, 0);
     defer socket.deinit();
 
     try socket.registerTo(notifier);

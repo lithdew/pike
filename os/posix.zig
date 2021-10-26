@@ -1,9 +1,8 @@
 const std = @import("std");
-
-const math = std.math;
-const builtin = std.builtin;
+const builtin = @import("builtin");
 
 const os = std.os;
+const math = std.math;
 
 pub usingnamespace if (!@hasDecl(std.os, "SHUT_RD") and !@hasDecl(std.os, "SHUT_WR") and !@hasDecl(std.os, "SHUT_RDWR"))
     struct {
@@ -26,7 +25,7 @@ const funcs = struct {
 pub fn shutdown_(sock: os.socket_t, how: c_int) !void {
     const rc = if (builtin.link_libc) funcs.shutdown(sock, how) else os.system.shutdown(sock, @intCast(i32, how));
     return switch (os.errno(rc)) {
-        0 => {},
+        .SUCCESS => {},
         .BADF => error.BadFileDescriptor,
         .INVAL => error.BadArgument,
         .NOTCONN => error.SocketNotConnected,
@@ -47,7 +46,7 @@ pub fn sendto_(
     while (true) {
         const rc = os.system.sendto(sockfd, buf.ptr, buf.len, flags, dest_addr, addrlen);
         switch (os.errno(rc)) {
-            0 => return @intCast(usize, rc),
+            .SUCCESS => return @intCast(usize, rc),
             .ACCES => return error.AccessDenied,
             .AGAIN, .PROTOTYPE => return error.WouldBlock,
             .ALREADY => return error.FastOpenAlreadyInProgress,
@@ -71,7 +70,7 @@ pub fn sendto_(
 }
 
 pub fn read_(fd: os.fd_t, buf: []u8) !usize {
-    const max_count = switch (std.Target.current.os.tag) {
+    const max_count = switch (builtin.os.tag) {
         .linux => 0x7ffff000,
         .macos, .ios, .watchos, .tvos => math.maxInt(i32),
         else => math.maxInt(isize),
@@ -81,7 +80,7 @@ pub fn read_(fd: os.fd_t, buf: []u8) !usize {
     while (true) {
         const rc = os.system.read(fd, buf.ptr, adjusted_len);
         switch (os.errno(rc)) {
-            0 => return @intCast(usize, rc),
+            .SUCCESS => return @intCast(usize, rc),
             .INTR => continue,
             .INVAL => unreachable,
             .FAULT => unreachable,
@@ -103,7 +102,7 @@ pub fn read_(fd: os.fd_t, buf: []u8) !usize {
 pub fn connect_(sock: os.socket_t, sock_addr: *const os.sockaddr, len: os.socklen_t) !void {
     while (true) {
         return switch (os.errno(os.system.connect(sock, sock_addr, len))) {
-            0 => {},
+            .SUCCESS => {},
             .ACCES => error.PermissionDenied,
             .PERM => error.PermissionDenied,
             .ADDRINUSE => error.AddressInUse,
@@ -127,7 +126,7 @@ pub fn connect_(sock: os.socket_t, sock_addr: *const os.sockaddr, len: os.sockle
 }
 
 pub fn accept_(sock: os.socket_t, addr: ?*os.sockaddr, addr_size: ?*os.socklen_t, flags: u32) !os.socket_t {
-    const have_accept4 = comptime !(std.Target.current.isDarwin() or builtin.os.tag == .windows);
+    const have_accept4 = comptime !(builtin.target.isDarwin() or builtin.os.tag == .windows);
 
     const accepted_sock = while (true) {
         const rc = if (have_accept4)
@@ -156,7 +155,7 @@ pub fn accept_(sock: os.socket_t, addr: ?*os.sockaddr, addr_size: ?*os.socklen_t
             }
         } else {
             switch (os.errno(rc)) {
-                0 => {
+                .SUCCESS => {
                     break @intCast(os.socket_t, rc);
                 },
                 .INTR => continue,
@@ -184,7 +183,7 @@ pub fn accept_(sock: os.socket_t, addr: ?*os.sockaddr, addr_size: ?*os.socklen_t
 }
 
 fn setSockFlags(sock: os.socket_t, flags: u32) !void {
-    if ((flags & os.SOCK_CLOEXEC) != 0) {
+    if ((flags & os.SOCK.CLOEXEC) != 0) {
         if (builtin.os.tag == .windows) {
             // TODO: Find out if this is supported for sockets
         } else {
@@ -201,7 +200,7 @@ fn setSockFlags(sock: os.socket_t, flags: u32) !void {
             };
         }
     }
-    if ((flags & os.SOCK_NONBLOCK) != 0) {
+    if ((flags & os.SOCK.NONBLOCK) != 0) {
         if (builtin.os.tag == .windows) {
             var mode: c_ulong = 1;
             if (os.windows.ws2_32.ioctlsocket(sock, os.windows.ws2_32.FIONBIO, &mode) == os.windows.ws2_32.SOCKET_ERROR) {
@@ -235,7 +234,7 @@ pub fn getsockopt(comptime T: type, handle: os.socket_t, level: u32, opt: u32) !
 
     const rc = os.system.getsockopt(handle, level, opt, @ptrCast([*]u8, &val), &val_len);
     return switch (std.os.linux.getErrno(rc)) {
-        0 => val,
+        .SUCCESS => val,
         .BADF => error.BadFileDescriptor, // The argument sockfd is not a valid file descriptor.
         .FAULT => error.InvalidParameter, // The address pointed to by optval or optlen is not in a valid part of the process address space.
         .NOPROTOOPT => error.UnsupportedOption, // The option is unknown at the level indicated.
@@ -247,7 +246,7 @@ pub fn getsockopt(comptime T: type, handle: os.socket_t, level: u32, opt: u32) !
 pub fn sigprocmask(flags: anytype, noalias set: ?*const os.sigset_t, noalias oldset: ?*os.sigset_t) !void {
     const rc = os.system.sigprocmask(flags, set, oldset);
     return switch (os.errno(rc)) {
-        0 => {},
+        .SUCCESS => {},
         .FAULT => error.InvalidParameter,
         .INVAL => error.BadSignalSet,
         else => |err| os.unexpectedErrno(err),

@@ -29,7 +29,7 @@ fn runBenchmarkServer(notifier: *const pike.Notifier, stopped: *bool) !void {
 
     const address = try net.Address.parseIp("127.0.0.1", 9000);
 
-    var socket = try pike.Socket.init(os.AF_INET, os.SOCK_DGRAM, 0, 0);
+    var socket = try pike.Socket.init(os.AF.INET, os.SOCK.DGRAM, 0, 0);
     defer socket.deinit();
 
     try socket.registerTo(notifier);
@@ -48,7 +48,7 @@ fn runBenchmarkClient(notifier: *const pike.Notifier, stopped: *bool) !void {
 
     const address = try net.Address.parseIp("127.0.0.1", 9000);
 
-    var socket = try pike.Socket.init(os.AF_INET, os.SOCK_DGRAM, 0, 0);
+    var socket = try pike.Socket.init(os.AF.INET, os.SOCK.DGRAM, 0, 0);
     defer socket.deinit();
 
     try socket.registerTo(notifier);
