@@ -138,7 +138,7 @@ else
 pub usingnamespace if (has_epoll)
     @import("inotify_posix.zig")
 else
-    @compileError("pike: unable to figure out a 'Inotify' implementation to use for the build target");
+    @compileLog("pike: unable to figure out a 'Inotify' implementation to use for the build target");
 
 // Export 'Waker' and 'PackedWaker'.
 
