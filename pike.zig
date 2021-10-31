@@ -135,6 +135,11 @@ else if (builtin.os.tag == .windows)
 else
     @compileError("pike: unable to figure out a 'Event' implementation to use for the build target");
 
+pub usingnamespace if (has_epoll)
+    @import("inotify_posix.zig")
+else
+    @compileLog("pike: unable to figure out a 'Inotify' implementation to use for the build target");
+
 // Export 'Waker' and 'PackedWaker'.
 
 pub usingnamespace @import("waker.zig");
