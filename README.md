@@ -1,3 +1,5 @@
+update to 0.9.0 release 2021-12-20
+
 # pike
 
 A minimal cross-platform high-performance async I/O library written in [Zig](https://ziglang.org).
