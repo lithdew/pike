@@ -32,7 +32,7 @@ pub fn loadWinsockExtensionFunction(comptime T: type, sock: ws2_32.SOCKET, guid:
     const rc = ws2_32.WSAIoctl(
         sock,
         @import("windows/ws2_32.zig").SIO_GET_EXTENSION_FUNCTION_POINTER,
-        @ptrCast(*const c_void, &guid),
+        @ptrCast(*const anyopaque, &guid),
         @sizeOf(windows.GUID),
         &function,
         @sizeOf(T),

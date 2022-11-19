@@ -79,7 +79,7 @@ pub const ConnectEx = fn (
     s: ws2_32.SOCKET,
     name: *const ws2_32.sockaddr,
     namelen: c_int,
-    lpSendBuffer: ?*c_void,
+    lpSendBuffer: ?*anyopaque,
     dwSendDataLength: windows.DWORD,
     lpdwBytesSent: ?*windows.DWORD,
     lpOverlapped: *windows.OVERLAPPED,
