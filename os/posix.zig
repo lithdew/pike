@@ -233,7 +233,7 @@ pub fn getsockopt(comptime T: type, handle: os.socket_t, level: u32, opt: u32) !
     var val_len: u32 = @sizeOf(T);
 
     const rc = os.system.getsockopt(handle, level, opt, @ptrCast([*]u8, &val), &val_len);
-    return switch (std.os.linux.getErrno(rc)) {
+    return switch (std.os.linux.getErrno(@intCast(usize, rc))) {
         .SUCCESS => val,
         .BADF => error.BadFileDescriptor, // The argument sockfd is not a valid file descriptor.
         .FAULT => error.InvalidParameter, // The address pointed to by optval or optlen is not in a valid part of the process address space.
