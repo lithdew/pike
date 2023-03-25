@@ -130,7 +130,7 @@ pub const Signal = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        for (self.previous) |sigaction, i| {
+        for (self.previous, 0..) |sigaction, i| {
             os.sigaction(
                 switch (i) {
                     0 => os.SIG.TERM,

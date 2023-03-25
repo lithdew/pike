@@ -106,7 +106,7 @@ pub const Socket = struct {
         }
     }
 
-    fn ErrorUnionOf(comptime func: anytype) std.builtin.TypeInfo.ErrorUnion {
+    fn ErrorUnionOf(comptime func: anytype) std.builtin.Type.ErrorUnion {
         return @typeInfo(@typeInfo(@TypeOf(func)).Fn.return_type.?).ErrorUnion;
     }
 
