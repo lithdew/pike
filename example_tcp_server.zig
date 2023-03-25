@@ -52,10 +52,10 @@ pub const Server = struct {
     socket: pike.Socket,
     clients: ClientQueue,
 
-    allocator: *mem.Allocator,
+    allocator: mem.Allocator,
     frame: @Frame(Server.run),
 
-    pub fn init(allocator: *mem.Allocator) !Server {
+    pub fn init(allocator: mem.Allocator) !Server {
         var socket = try pike.Socket.init(os.AF.INET, os.SOCK.STREAM, os.IPPROTO.TCP, 0);
         errdefer socket.deinit();
 
@@ -123,8 +123,9 @@ pub const Server = struct {
 
 pub fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
     // Setup allocator.
-    var gpa: heap.GeneralPurposeAllocator(.{}) = .{};
-    defer _ = gpa.deinit();
+     var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = general_purpose_allocator.allocator();
+    defer _=general_purpose_allocator.deinit();
 
     // Setup signal handler.
 
@@ -143,7 +144,8 @@ pub fn run(notifier: *const pike.Notifier, stopped: *bool) !void {
 
     // Setup TCP server.
 
-    var server = try Server.init(&gpa.allocator);
+    //var server = try Server.init(gpa.allocator);
+    var server = try Server.init(gpa);
     defer server.deinit();
 
     // Start the server, and await for an interrupt signal to gracefully shutdown

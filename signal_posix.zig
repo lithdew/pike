@@ -46,44 +46,54 @@ pub const Signal = struct {
     previous: [@bitSizeOf(SignalType)]os.Sigaction,
 
     fn handler(signal: c_int) callconv(.C) void {
-        const current_held = lock.acquire();
+        const current_held = lock.lock();
+        _=current_held;
         const current_mask = mask;
-        current_held.release();
+        lock.unlock();
+        //current_held.release();
 
         switch (signal) {
             os.SIG.TERM => {
                 if (!current_mask.terminate) return;
 
-                const held = lock.acquire();
+                const held = lock.lock();
+                _=held;
                 const next_node = waker.wake(.{ .terminate = true });
-                held.release();
+                lock.unlock();
+                //held.release();
 
                 if (next_node) |node| pike.dispatch(&node.data, .{});
             },
             os.SIG.INT => {
                 if (!current_mask.interrupt) return;
 
-                const held = lock.acquire();
+                const held = lock.lock();
+                              _=held;
                 const next_node = waker.wake(.{ .interrupt = true });
-                held.release();
+                lock.unlock();
+                //held.release();
 
                 if (next_node) |node| pike.dispatch(&node.data, .{});
             },
             os.SIG.QUIT => {
                 if (!current_mask.quit) return;
 
-                const held = lock.acquire();
+                const held = lock.lock();
+                _=held;
                 const next_node = waker.wake(.{ .quit = true });
-                held.release();
+                lock.unlock();
+                //held.release();
 
                 if (next_node) |node| pike.dispatch(&node.data, .{});
             },
             os.SIG.HUP => {
                 if (!current_mask.hup) return;
 
-                const held = lock.acquire();
+                const held = lock.lock();
+                _=held;
                 const next_node = waker.wake(.{ .hup = true });
-                held.release();
+                lock.unlock();
+                //held.release();
 
                 if (next_node) |node| pike.dispatch(&node.data, .{});
             },
@@ -92,8 +102,9 @@ pub const Signal = struct {
     }
 
     pub fn init(current: SignalType) !Self {
-        const held = lock.acquire();
-        defer held.release();
+        const held = lock.lock();
+        _=held;
+        defer lock.unlock();
 
         const new_mask = @bitCast(SignalType, @bitCast(MaskInt, current) | @bitCast(MaskInt, mask));
 
@@ -119,7 +130,7 @@ pub const Signal = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        for (self.previous) |sigaction, i| {
+        for (self.previous, 0..) |sigaction, i| {
             os.sigaction(
                 switch (i) {
                     0 => os.SIG.TERM,
@@ -135,19 +146,24 @@ pub const Signal = struct {
     }
 
     pub fn wait(self: *Self) callconv(.Async) !void {
-        const held = lock.acquire();
+        const held = lock.lock();
+        _=held;
         if (waker.wait(self.current)) {
-            held.release();
+            lock.unlock();
+            //held.release();
         } else {
             suspend {
                 var node = @TypeOf(waker).FrameNode{ .data = pike.Task.init(@frame()) };
                 @TypeOf(waker).FrameList.append(&waker.heads, self.current, &node);
-                held.release();
+                lock.unlock();
+                //held.release();
             }
 
-            const next_held = lock.acquire();
+            const next_held = lock.lock();
+                          _=next_held;
             const next_node = waker.next(self.current);
-            next_held.release();
+            lock.unlock();
+            //next_held.release();
 
             if (next_node) |node| {
                 pike.dispatch(&node.data, .{});

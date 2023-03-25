@@ -114,7 +114,7 @@ pub fn PackedWaker(comptime Frame: type, comptime Set: type) type {
 
         pub fn wait(self: *Self, set: Set) bool {
             var any_ready = false;
-            inline for (set_fields) |field, field_index| {
+            inline for (set_fields, 0..) |field, field_index| {
                 if (@field(set, field.name) and self.ready[field_index]) {
                     if (self.ready[field_index]) {
                         self.ready[field_index] = false;
@@ -128,7 +128,7 @@ pub fn PackedWaker(comptime Frame: type, comptime Set: type) type {
 
         pub fn wake(self: *Self, set: Set) ?*FrameList.Node {
             return FrameList.pop(&self.heads, set) orelse blk: {
-                inline for (set_fields) |field, field_index| {
+                inline for (set_fields, 0..) |field, field_index| {
                     if (@field(set, field.name) and self.heads[field_index] == null) {
                         self.ready[field_index] = true;
                     }
@@ -139,7 +139,7 @@ pub fn PackedWaker(comptime Frame: type, comptime Set: type) type {
         }
 
         pub fn next(self: *Self, set: Set) ?*FrameList.Node {
-            inline for (set_fields) |field, field_index| {
+            inline for (set_fields, 0..) |field, field_index| {
                 if (@field(set, field.name) and self.heads[field_index] == null) {
                     return null;
                 }
@@ -228,7 +228,7 @@ fn PackedList(comptime T: type, comptime U: type) type {
             assert(mem.allEqual(?*Self.Node, &node.prev, null));
             assert(mem.allEqual(?*Self.Node, &node.next, null));
 
-            inline for (set_fields) |field, i| {
+            inline for (set_fields, 0..) |field, i| {
                 if (@field(set, field.name)) {
                     if (heads[i]) |head| {
                         const tail = head.prev[i] orelse unreachable;
@@ -249,7 +249,7 @@ fn PackedList(comptime T: type, comptime U: type) type {
             assert(mem.allEqual(?*Self.Node, &node.prev, null));
             assert(mem.allEqual(?*Self.Node, &node.next, null));
 
-            inline for (set_fields) |field, i| {
+            inline for (set_fields, 0..) |field, i| {
                 if (@field(set, field.name)) {
                     if (heads[i]) |head| {
                         node.prev[i] = head;
@@ -266,7 +266,7 @@ fn PackedList(comptime T: type, comptime U: type) type {
         }
 
         pub fn pop(heads: *[set_count]?*Self.Node, set: U) ?*Self.Node {
-            inline for (set_fields) |field, field_index| {
+            inline for (set_fields, 0..) |field, field_index| {
                 if (@field(set, field.name) and heads[field_index] != null) {
                     const head = heads[field_index] orelse unreachable;
 
